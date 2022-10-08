@@ -317,9 +317,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
+  if (!list_empty (&cond->waiters)) {
+    list_sort(&(cond->waiters),cond_priority_less,NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -336,4 +338,11 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+bool 
+cond_priority_less(const struct list_elem *a,const struct list_elem *b,void *aux){
+  struct thread* thread_a = list_entry(list_begin(&(list_entry(a,struct semaphore_elem,elem)->semaphore).waiters),struct thread,elem);
+  struct thread* thread_b = list_entry(list_begin(&(list_entry(b,struct semaphore_elem,elem)->semaphore).waiters),struct thread,elem);
+  return thread_a->priority > thread_b->priority;
 }
