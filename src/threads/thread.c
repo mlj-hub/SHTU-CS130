@@ -200,6 +200,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  // when a new thread is created, the current thread may need to yield CPU
   thread_yield();
 
   return tid;
@@ -238,6 +239,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  // make the list a priority queue
   list_insert_ordered (&ready_list, &t->elem,priority_less_func,NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -309,6 +311,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
+    // make the ready_list a priority queue
     list_insert_ordered(&ready_list, &cur->elem, priority_less_func, NULL);
   cur->status = THREAD_READY;
   schedule ();
@@ -337,6 +340,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  // after changing the priority, the current thread may need to yeild CPU
   thread_yield();
 }
 
@@ -467,7 +471,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
-  list_insert_ordered (&all_list, &t->allelem,priority_less_func,NULL);
+  list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
 

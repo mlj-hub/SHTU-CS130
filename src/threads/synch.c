@@ -117,8 +117,9 @@ sema_up (struct semaphore *sema)
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
   sema->value++;
-  thread_yield();
   intr_set_level (old_level);
+  // after waking up a thread, the current thread may need to yield the CPU
+  thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -296,6 +297,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
+  // no threads are put into the waiter list in semaphore before calling sema_down, thus list_insert_ordered is meaningless
   list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
@@ -317,7 +319,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) {
+  if (!list_empty (&cond->waiters))
+  {
+    // sort the list and wake the thread with highest priority
     list_sort(&(cond->waiters),cond_priority_less,NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
@@ -340,6 +344,7 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 }
 
+/*Compare the priority of the two threads according to the given list,return true if a>b*/ 
 bool 
 cond_priority_less(const struct list_elem *a,const struct list_elem *b,void *aux){
   struct thread* thread_a = list_entry(list_begin(&(list_entry(a,struct semaphore_elem,elem)->semaphore).waiters),struct thread,elem);
