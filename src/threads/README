@@ -1,0 +1,20 @@
+For task 2, a thread can have two priorities:
+1. original priority
+2. donated priority
+
+original priority is set when the thread is created and can be modifidy by calling thread_set_priority
+donated priority is related to waiters of locks which are held by this thread. donated priority is the largest priority of 
+the threads which are waiting for locks which are held by this thread.
+
+In struct thread, donor_list will be the list which contains all donors. when calling thread_get_priority, it will return 
+the highest priority among the thread self and its donors. when calling thread_set_priority, it will set the priority member 
+in the struct thread.
+
+When will the donated_priority be changed?
+1. lock_acquire : when there is a thread trying to acquire the lock which has already been held, we need to 
+add this thread into the holder's donor list and change its donated priority
+2. lock_release : when a lock is released by a thread, 
+
+When to preempt the running thread ?
+1. lock acquire: when a lock is acquired, there may occur a donation and change the priority of some threads.
+2. lock release: when a lock is released, the donated priority may be changed which can cause a preempt. 
