@@ -204,6 +204,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  // when a new thread is created, the current thread may need to yield CPU
+  thread_yield();
 
   return tid;
 }
@@ -241,7 +243,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // make the list a priority queue
+  list_insert_ordered (&ready_list, &t->elem,priority_less_func,NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -312,7 +315,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    // make the ready_list a priority queue
+    list_insert_ordered(&ready_list, &cur->elem, priority_less_func, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -340,13 +344,15 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  // after changing the priority, the current thread may need to yeild CPU
+  thread_yield();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return max(thread_current ()->priority,thread_current()->donated_priority);
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -467,6 +473,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->donated_priority = -1;
+  list_init(&t->holding_locks);
+  t->waiting_lock = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -618,4 +627,67 @@ thread_in_sleeplist (struct list * list, thread_action_func *func, void *aux)
       struct thread *t = list_entry (e, struct thread, sleepelem);
       func (t, aux);
     }
+}
+
+/* Return the priority of a special thread */
+int
+get_thread_priority(struct thread * a)
+{
+  return max(a->priority,a->donated_priority);
+}
+
+/*Returns true if thread a's priority is larger than thread b*/
+bool 
+priority_less_func(const struct list_elem *a,const struct list_elem *b,void *aux)
+{
+  struct thread * t_a = list_entry(a, struct thread, elem);
+  struct thread * t_b = list_entry(b, struct thread, elem);
+  return get_thread_priority(t_a) > get_thread_priority(t_b);
+}
+
+/* Update donated_priority when acquire a lock */
+void
+update_donated_priority(struct thread * a, int new_priority )
+{
+  enum intr_level old_level = intr_disable();
+  /* If the new_priority is larger, change it */
+  if(new_priority > a->donated_priority)
+    a->donated_priority = new_priority;
+  /* If the thread is in the ready list, need to update the priority queue */
+  if(a->status == THREAD_READY)
+  {
+    list_remove(&a->elem);
+    list_insert_ordered(&ready_list,&a->elem,priority_less_func,NULL);
+  }
+  /* If the thread is blocked by acquiring a lock, update the donation chain by reservely calling the function */
+  if(a->status == THREAD_BLOCKED && a->waiting_lock != NULL)
+  {
+    if(a->waiting_lock->max_giving_priority < get_thread_priority(a))
+     /* Change a's priority can cause the lock which a is waiting to change its max giving priority */
+      a->waiting_lock->max_giving_priority = get_thread_priority(a);
+    update_donated_priority(a->waiting_lock->holder,get_thread_priority(a));
+  }
+  intr_set_level(old_level);
+}
+
+/* Update the holding lock list when release a lock */
+void
+update_holding_lock(struct thread * a, struct lock * lock)
+{
+  enum intr_level old_level = intr_disable();
+  list_remove(&lock->elem);
+  int max_priority = -1;
+  struct list * temp_list = &a->holding_locks;
+  if(!list_empty(temp_list))
+  {
+    /* Update the max_giving_priority by finding the max priority among the holding locks */
+    for(struct list_elem * i = list_begin(temp_list);i!=list_end(temp_list);i=list_next(i))
+    {
+      struct lock * temp_lock = list_entry(i,struct lock,elem);
+      if(temp_lock -> max_giving_priority>max_priority)
+        max_priority = temp_lock->max_giving_priority;
+    }
+  }
+  a->donated_priority = max_priority;
+  intr_set_level(old_level);
 }
