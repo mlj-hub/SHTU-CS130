@@ -28,6 +28,9 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of sleeping processes. */
+struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +95,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -182,7 +186,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  t->t_block = 0; /*where to palce*/
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -582,3 +586,36 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+/*check the thread if to be unblocked*/
+void
+btc (struct thread *t, void *aux UNUSED)
+{
+  if( t->status == THREAD_BLOCKED && t->t_block > 0)
+  {
+    t->t_block--;
+    if(t->t_block == 0)
+    {
+      thread_unblock(t);
+      list_remove(&t->sleepelem);
+    }
+  }
+}
+
+/* Invoke function 'func' on all threads in the given list 'list', passing along 'aux'.
+   This function must be called with interrupts off. */
+void
+thread_in_sleeplist (struct list * list, thread_action_func *func, void *aux)
+{
+  struct list_elem *e;
+
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  for (e = list_begin (list); e != list_end (list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, sleepelem);
+      func (t, aux);
+    }
+}
