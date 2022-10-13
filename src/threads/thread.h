@@ -97,7 +97,12 @@ struct thread
     struct list_elem sleepelem;
    /* list element for sleeplist */
     int64_t t_block;
-   /*record the time to sleep for this thread*/
+   /* record the time to sleep for this thread. */
+
+   int nice;
+   int recent_cpu;
+
+   /* create nice and recent_cpu for thread. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -159,5 +164,8 @@ void update_donated_priority(struct thread *, int);
 int get_thread_priority(struct thread * );
 void update_holding_lock(struct thread * , struct lock * );
 
+void get_new_priority(struct thread *);
+void increase_recent_cpu(void);
+void get_new_load_avg_and_recent_cpu(void);
 
 #endif /* threads/thread.h */

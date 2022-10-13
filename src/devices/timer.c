@@ -180,6 +180,19 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   thread_in_sleeplist(&sleep_list,btc,NULL);
+  
+  if(thread_mlfqs)
+  {
+    increase_recent_cpu();
+    if(!(ticks%TIMER_FREQ))
+    {
+      get_new_load_avg_and_recent_cpu();
+    }
+    else if(!(ticks%4))
+    {
+      get_new_priority(thread_current());
+    }
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

@@ -20,6 +20,21 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+
+/* achieve float point number calculation. */
+typedef int I;
+#define fp_num(A) ((I)((A)<<16))
+#define add(A,B) ((A)+(B))
+#define add_mix(A,B) ((A)+((B)<<16))
+#define sub(A,B) ((A)-(B))
+#define sub_mix(A,B) ((A)-((B)<<16))
+#define mult(A,B) ((I)(((int64_t)(A))*(B)>>16))
+#define mult_mix(A,B) ((A)*(B))
+#define div(A,B) ((I)((((int64_t)(A))<<16)/(B)))
+#define div_mix(A,B) ((A)/(B))
+#define intpart(A) ((A)>>16)
+#define round(A) ((A)>=0?(((A)+(1<<15))>>16):(((A)-(1<<15))>>16))
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -39,6 +54,8 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+int load_avg;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -119,6 +136,8 @@ thread_start (void)
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
+
+  load_avg = fp_num(0);
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -359,31 +378,31 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current()->nice = nice;
+  get_new_priority(thread_current());
+  /* once nice and priority to be changed thread need to reconsider */
+  thread_yield();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return round(mult_mix(load_avg,100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return round(mult_mix(thread_current()->recent_cpu,100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -476,7 +495,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->donated_priority = -1;
   list_init(&t->holding_locks);
   t->waiting_lock = NULL;
-
+  t->nice = 0;
+  t->recent_cpu = fp_num(0);
+  /* init nice and recent_cpu value. */
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -691,3 +712,74 @@ update_holding_lock(struct thread * a, struct lock * lock)
   a->donated_priority = max_priority;
   intr_set_level(old_level);
 }
+
+/* update the priority of thread */
+void
+get_new_priority(struct thread *t)
+{
+  /* idle_thread is not included here */
+  if (t==idle_thread)
+  {
+    return;
+  }
+  ASSERT(thread_mlfqs);
+  ASSERT(t!=idle_thread);
+  /* calculate the priority */
+  t->priority = intpart(sub_mix(sub(fp_num(PRI_MAX),div_mix(t->recent_cpu,4)),2*t->nice));
+  /* limit the priority in min to max */
+  if(t->priority < PRI_MIN){
+    t->priority = PRI_MIN;
+  }
+  if(t->priority > PRI_MAX)
+  {
+    t->priority = PRI_MAX;
+  }
+}
+
+/* increase recent_cpu by 1 */
+void
+increase_recent_cpu(void)
+{
+  ASSERT(thread_mlfqs);
+  ASSERT(intr_context());
+
+  struct thread *ct = thread_current();
+  /* idle_thread is not included here */
+  if(ct == idle_thread)
+  {
+    return;
+  }
+  ct->recent_cpu = add_mix(ct->recent_cpu,1);
+}
+
+/* get_new_load_avg_and_recent_cpu */
+void
+get_new_load_avg_and_recent_cpu(void)
+{
+  ASSERT(thread_mlfqs);
+  ASSERT(intr_context());
+
+  size_t ready_threads = list_size(&ready_list);
+  /* idle_thread is not included here */
+  if(thread_current()!=idle_thread)
+  {
+    ready_threads++;
+  }
+  /* calculate load_avg */
+  load_avg = add(div_mix(mult_mix(load_avg,59),60),div_mix(fp_num(ready_threads),60));
+
+  struct thread *t;
+  struct list_elem *e = list_begin(&all_list);
+  /*  update every thread's recent_cpu */
+  for(;e!=list_end(&all_list);e=list_next(e))
+  {
+    t = list_entry(e,struct thread,allelem);
+    if(t != idle_thread)
+    {
+      /* calculate new recent_cpu */
+      t->recent_cpu = add_mix(mult(div(mult_mix(load_avg,2),add_mix(mult_mix(load_avg,2),1)),t->recent_cpu),t->nice);
+      get_new_priority(t);
+    }
+  }
+}
+
