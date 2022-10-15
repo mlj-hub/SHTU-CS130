@@ -108,9 +108,9 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
-    /* List that contains all the donor threads. */
+    /* List of all locks which are hold by this thread. */
     struct list holding_locks; 
-    /* Thread which this thread donate priority to. */
+    /* The lock that this lock waits for. */
     struct lock * waiting_lock;
     /* Priority which is donated to this thread. */
     int donated_priority;

@@ -674,6 +674,11 @@ update_donated_priority(struct thread * a, int new_priority )
   /* If the new_priority is larger, change it */
   if(new_priority > a->donated_priority)
     a->donated_priority = new_priority;
+  else
+  {
+    intr_set_level(old_level);
+    return;
+  }
   /* If the thread is in the ready list, need to update the priority queue */
   if(a->status == THREAD_READY)
   {
