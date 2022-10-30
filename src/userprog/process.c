@@ -20,6 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void pass_argument(void ** esp,char * args);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -40,10 +41,10 @@ process_execute (const char *file_name)
 
   // extract the name from file_name
   char * name,*save_ptr;
-  name = strtok_r(file_name," ",&save_ptr);
+  name = strtok_r(fn_copy," ",&save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (name, PRI_DEFAULT, start_process, save_ptr);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -65,10 +66,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   // extract the name for file_name
-  char * name,*save_ptr;
-  name = strtok_r(file_name," ",&save_ptr);
-
+  char * name,*args=file_name;
+  name = thread_current()->name;
   success = load (name, &if_.eip, &if_.esp);
+  
+  pass_argument(&if_.esp,args);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -471,4 +473,10 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+static void 
+pass_argument(void ** esp,char * args){
+  char * token,* saved_ptr;
+  
 }
