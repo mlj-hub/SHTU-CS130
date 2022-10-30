@@ -478,5 +478,24 @@ install_page (void *upage, void *kpage, bool writable)
 static void 
 pass_argument(void ** esp,char * args){
   char * token,* saved_ptr;
-  
+  int argc=0; char * argv[30];
+  // push arguments into stack
+  for(token = strtok_r(args," ",&saved_ptr);token!=NULL;token = strtok_r(NULL," ",&saved_ptr)){
+    *esp-=(strlen(token)+1);
+    memcpy(*esp,token,strlen(token)+1);
+    argv[argc] = (char *)(*esp);
+  }
+  // push the address of arguments into stack
+  for(int i = argc-1;i>=0;i--){
+    *esp-=sizeof(char *);
+    memcpy(*esp,&argv[i],sizeof(char *));
+  }
+  // push the beginning address of argv
+  *esp -= sizeof(char **);
+  *(char **)*esp = (char **)*esp + sizeof(char **);
+  // push argc
+  *esp -= sizeof(int);
+  *(int*)*esp = argc;
+  // push return address
+  *esp -= sizeof(int);
 }
