@@ -86,7 +86,11 @@ void halt (void)
 
 void exit (int status)
 {
-
+  struct thread * t= thread_current();
+  t->process.exit = 1;
+  t->process.exit_status = status;
+  thread_exit();
+  NOT_REACHED();
 }
 
 pid_t exec (const char *file)

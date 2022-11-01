@@ -98,6 +98,21 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+   /* Pointer to the parent thread  */
+   struct thread * parent_thread;
+   /* List of the child threads */
+   struct list children;
+   struct list_elem childelem;
+   struct {
+      /* The status when the thread(user process) exit */
+      int exit_status;
+      /* Whether a process exits */
+      bool exit;
+      /* Pid for the user process */
+      int pid;
+   }process;
+   
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

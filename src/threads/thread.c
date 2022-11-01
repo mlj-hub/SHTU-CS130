@@ -463,6 +463,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  // init addtional members
+  list_init(&t->children);
+  t->parent_thread = NULL;
+  t->process.exit = 0;
+  t->process.exit_status = -1;
+  t->process.pid = t->tid;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
