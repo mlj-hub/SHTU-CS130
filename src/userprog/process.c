@@ -532,6 +532,8 @@ pass_argument(void ** esp,char * args){
     // update argv to the address in stack
     argv[i] = (char *)(*esp);
   }
+  *esp = (void*)(((int)*esp)&0xfffffffc);
+  *esp -= sizeof(int);
   // push the address of arguments into stack
   for(int i = argc-1;i>=0;i--){
     *esp-=sizeof(char *);
