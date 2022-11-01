@@ -65,9 +65,12 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  struct thread * t = thread_current();
   // extract the name for file_name
   char * name,*args=file_name;
-  name = thread_current()->name;
+  name = t->name;
+  lock_init(&t->child_lock);
+  lock_acquire(&t->child_lock);
   success = load (name, &if_.eip, &if_.esp);
   
   pass_argument(&if_.esp,args);
@@ -99,7 +102,40 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  // invalid tid
+  if(child_tid == TID_ERROR)
+    return -1;
+  struct thread * t = thread_current();
+  struct thread * child = NULL;
+  // find the child
+  for(struct list_elem * i = list_begin(&t->children);i!=list_end(&t->children);i=list_next(&t->children))
+  {
+    struct thread * temp = list_entry(i,struct thread,childelem);
+    if(temp->tid == child_tid)
+    {
+      child = temp;
+    }
+  }
+  // no such child
+  if(!child)
+    return -1;
+  // already waited
+  if(child->waited)
+    return -1;
+  // set this child as waited
+  child->waited = 1;
+  // wait for the child
+  lock_acquire(&child->child_lock);
+  if(child->process.killed)
+  {
+    lock_release(&child->child_lock);
+    return -1;
+  }
+  else
+  {
+    lock_release(&child->child_lock);
+    return child->process.exit_status;
+  }
 }
 
 /* Free the current process's resources. */

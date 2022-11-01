@@ -171,6 +171,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  struct thread * parent = thread_current();
 
   ASSERT (function != NULL);
 
@@ -182,6 +183,9 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  /* Add new thread to its parent's children list */
+  list_push_back(&parent->children,&t->childelem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -290,8 +294,10 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+  lock_release(&thread_current()->child_lock);
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
+  thread_current ()->process.exit = 1;
   schedule ();
   NOT_REACHED ();
 }
@@ -466,9 +472,11 @@ init_thread (struct thread *t, const char *name, int priority)
   // init addtional members
   list_init(&t->children);
   t->parent_thread = NULL;
+  t->waited = 0;
   t->process.exit = 0;
   t->process.exit_status = -1;
   t->process.pid = t->tid;
+  t->process.killed = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

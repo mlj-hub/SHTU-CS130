@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 static bool check_ptr(void * ptr);
@@ -22,7 +23,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   int sys_num = *(int *)esp;
   void * argv[3]={esp+4, esp+8,esp+12};
   // choose which syscall to call according to sys_num
-  switch(sys_num){
+  switch(sys_num)
+  {
     case SYS_HALT:
       halt();
       break;
@@ -71,7 +73,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 
 /* Check whether the given pointer is valid */
-static bool check_ptr(void * ptr)
+static bool
+check_ptr(void * ptr)
 {
   struct thread * t = thread_current();
   if(!is_user_vaddr(ptr) || !ptr || !pagedir_get_page(t->pagedir,ptr))
@@ -84,7 +87,8 @@ void halt (void)
 
 }
 
-void exit (int status)
+void
+exit (int status)
 {
   struct thread * t= thread_current();
   t->process.exit = 1;
@@ -100,7 +104,7 @@ pid_t exec (const char *file)
 
 int wait (pid_t pid)
 {
-
+  return process_wait(pid);
 }
 
 bool create (const char *file, unsigned initial_size){}
