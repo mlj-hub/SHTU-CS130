@@ -35,18 +35,23 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  char * fn_copy1 = palloc_get_page (0);
+  if (fn_copy == NULL || fn_copy1 == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy1, file_name, PGSIZE);
 
   // extract the name from file_name
   char * name,*save_ptr;
   name = strtok_r(fn_copy," ",&save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, save_ptr);
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy1);
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy1); 
+  }
   return tid;
 }
 
@@ -67,8 +72,9 @@ start_process (void *file_name_)
 
   struct thread * t = thread_current();
   // extract the name for file_name
-  char * name,*args=file_name;
-  name = t->name;
+  char * name,*save_ptr;
+  name = strtok_r(file_name," ",&save_ptr);
+  char *args=save_ptr;
   lock_init(&t->child_lock);
   lock_acquire(&t->child_lock);
   success = load (name, &if_.eip, &if_.esp);
@@ -515,11 +521,16 @@ static void
 pass_argument(void ** esp,char * args){
   char * token,* saved_ptr;
   int argc=0; char * argv[30];
-  // push arguments into stack
+  // store arguments into argv
   for(token = strtok_r(args," ",&saved_ptr);token!=NULL;token = strtok_r(NULL," ",&saved_ptr)){
-    *esp-=(strlen(token)+1);
-    memcpy(*esp,token,strlen(token)+1);
-    argv[argc] = (char *)(*esp);
+    argv[argc++] = token;
+  }
+  // push them into stack inversely
+  for(int i = argc-1;i>=0;i--){
+    (*esp)-=(strlen(argv[i])+1);
+    memcpy(*esp,argv[i],strlen(argv[i])+1);
+    // update argv to the address in stack
+    argv[i] = (char *)(*esp);
   }
   // push the address of arguments into stack
   for(int i = argc-1;i>=0;i--){
@@ -528,7 +539,7 @@ pass_argument(void ** esp,char * args){
   }
   // push the beginning address of argv
   *esp -= sizeof(char **);
-  *(char **)*esp = (char **)*esp + sizeof(char **);
+  *(char **)*esp = *esp + sizeof(char **);
   // push argc
   *esp -= sizeof(int);
   *(int*)*esp = argc;
