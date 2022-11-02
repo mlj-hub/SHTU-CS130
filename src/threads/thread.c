@@ -506,6 +506,8 @@ init_thread (struct thread *t, const char *name, int priority)
   //init semaphore for load
   sema_init(&t->child_load,0);
   t->child_run = 0;
+  // init thread's exe_file
+  t->exe_file = NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

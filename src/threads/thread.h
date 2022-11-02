@@ -141,6 +141,8 @@ struct thread
    struct list owned_files;
    /* Next file descriptor */
    int next_fd;
+   /* Executable file */
+   struct file * exe_file;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
