@@ -133,6 +133,10 @@ struct thread
    struct list children;
    /* Information of a thread */
    struct child_info * child_info;
+   /* Whether the child thread runs successfully */
+   bool child_run;
+   /* Semaphore for load  */
+   struct semaphore child_load;
    /* List of all owned files */
    struct list owned_files;
    /* Next file descriptor */

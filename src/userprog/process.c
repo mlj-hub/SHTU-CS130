@@ -36,8 +36,13 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   char * fn_copy1 = palloc_get_page (0);
-  if (fn_copy == NULL || fn_copy1 == NULL)
+  if (fn_copy == NULL || fn_copy1 == NULL){
+    if(fn_copy)
+      palloc_free_page (fn_copy); 
+    if(fn_copy1)
+      palloc_free_page (fn_copy1); 
     return TID_ERROR;
+  }
   strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy1, file_name, PGSIZE);
 
@@ -47,12 +52,16 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy1);
+  // wait for child to load
+  if(tid != TID_ERROR)
+    sema_down(&thread_current()->child_load);
   if (tid == TID_ERROR)
   {
-    palloc_free_page (fn_copy); 
     palloc_free_page (fn_copy1); 
   }
-  return tid;
+  palloc_free_page(fn_copy);
+  // if the child is not running, return tid_error
+  return thread_current()->child_run? tid:TID_ERROR;
 }
 
 /* A thread function that loads a user process and starts it
@@ -73,6 +82,9 @@ start_process (void *file_name_)
   struct thread * t = thread_current();
   // extract the name for file_name
   success = load (thread_current()->name, &if_.eip, &if_.esp);
+  // tell the parent whether success
+  t->parent_thread->child_run= success;
+  sema_up(&t->parent_thread->child_load);
   
   pass_argument(&if_.esp,file_name);
 

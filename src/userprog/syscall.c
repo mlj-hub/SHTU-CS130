@@ -65,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = write(*(int*)argv[0],*(const void **)argv[1],*(unsigned*)argv[2]);
       break;
     default:
-      printf("invalid sys call number! exit\n");
+      exit(-1);
       NOT_REACHED();
   }
 }
@@ -73,7 +73,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 /* Check whether the given pointer is valid */
 static bool
-check_ptr(void * ptr)
+check_ptr(const void * ptr)
 {
   struct thread * t = thread_current();
   if(!is_user_vaddr(ptr) || !ptr || !pagedir_get_page(t->pagedir,ptr))
@@ -97,7 +97,11 @@ exit (int status)
 
 pid_t exec (const char *file)
 {
-
+  if(!check_ptr((const void *)file))
+    return -1;
+  int pid;
+  pid = process_execute(file);
+  
 }
 
 int wait (pid_t pid)
