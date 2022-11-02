@@ -60,6 +60,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_READ:
       f->eax = read(*(int*)argv[0],*(void **)argv[1],*(unsigned*)argv[2]);
+      break;
     case SYS_WRITE:
       f->eax = write(*(int*)argv[0],*(const void **)argv[1],*(unsigned*)argv[2]);
       break;
@@ -67,8 +68,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       printf("invalid sys call number! exit\n");
       NOT_REACHED();
   }
-
-  printf ("system call!\n");
 }
 
 
@@ -112,7 +111,22 @@ bool remove (const char *file){}
 int open (const char *file){}
 int filesize (int fd){}
 int read (int fd, void *buffer, unsigned length){}
-int write (int fd, const void *buffer, unsigned length){}
+
+int write (int fd, const void *buffer, unsigned length)
+{
+  for(void * i = buffer;i<buffer+length;i+=PGSIZE)
+    check_ptr(i);
+  if(fd == 1)
+  {
+    putbuf((const char *)buffer,length);
+    return length;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
 void seek (int fd, unsigned position){}
 unsigned tell (int fd){}
 void close (int fd){}
