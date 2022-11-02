@@ -72,14 +72,9 @@ start_process (void *file_name_)
 
   struct thread * t = thread_current();
   // extract the name for file_name
-  char * name,*save_ptr;
-  name = strtok_r(file_name," ",&save_ptr);
-  char *args=save_ptr;
-  lock_init(&t->child_lock);
-  lock_acquire(&t->child_lock);
-  success = load (name, &if_.eip, &if_.esp);
+  success = load (thread_current()->name, &if_.eip, &if_.esp);
   
-  pass_argument(&if_.esp,args);
+  pass_argument(&if_.esp,file_name);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
