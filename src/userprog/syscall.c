@@ -8,7 +8,8 @@
 #include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
-static bool check_ptr(void * ptr);
+static bool check_ptr(const void * ptr);
+static bool check_esp(const void * esp_);
 
 void
 syscall_init (void) 
@@ -20,6 +21,11 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   void * esp = f->esp;
+  // check the address space of whole arguments
+  if(!check_esp(esp))
+  {
+    exit(-1);
+  }
   int sys_num = *(int *)esp;
   void * argv[3]={esp+4, esp+8,esp+12};
   // choose which syscall to call according to sys_num
@@ -79,6 +85,47 @@ check_ptr(const void * ptr)
   if(!is_user_vaddr(ptr) || !ptr || !pagedir_get_page(t->pagedir,ptr))
     return false;  
   return true;
+}
+
+static bool
+check_esp(const void * esp)
+{
+  // check the whole address space of sysnum
+  if(!check_ptr(esp)||!check_ptr(esp+3))
+    return false;
+  int sys_num = *(int *)esp;
+  esp +=sizeof(int);
+  bool success = true;
+  // check the whole address space of arguments
+  switch(sys_num)
+  {
+    case SYS_HALT:
+      break;
+    case SYS_EXIT:
+    case SYS_EXEC:
+    case SYS_WAIT:
+    case SYS_REMOVE:
+    case SYS_OPEN:
+    case SYS_FILESIZE:
+    case SYS_TELL:
+    case SYS_CLOSE:
+      if(!check_ptr(esp) || !check_ptr(esp+3))
+        success = false;
+      break;
+    case SYS_SEEK:
+    case SYS_CREATE:
+      if(!check_ptr(esp) || !check_ptr(esp+7))
+        success = false;
+      break;
+    case SYS_READ:
+    case SYS_WRITE:
+      if(!check_ptr(esp) || !check_ptr(esp+7))
+        success = false;
+      break;
+    default:
+      success = false;
+  }
+  return success;
 }
 
 void halt (void) 
