@@ -107,11 +107,11 @@ process_wait (tid_t child_tid UNUSED)
   if(child_tid == TID_ERROR)
     return -1;
   struct thread * t = thread_current();
-  struct thread * child = NULL;
+  struct child_info * child = NULL;
   // find the child
-  for(struct list_elem * i = list_begin(&t->children);i!=list_end(&t->children);i=list_next(&t->children))
+  for(struct list_elem * i = list_begin(&t->children);i!=list_end(&t->children);i=list_next(i))
   {
-    struct thread * temp = list_entry(i,struct thread,childelem);
+    struct child_info * temp = list_entry(i,struct child_info,childelem);
     if(temp->tid == child_tid)
     {
       child = temp;
@@ -126,16 +126,14 @@ process_wait (tid_t child_tid UNUSED)
   // set this child as waited
   child->waited = 1;
   // wait for the child
-  lock_acquire(&child->child_lock);
-  if(child->process.killed)
+  sema_down(&child->child_sema);
+  if(child->killed)
   {
-    lock_release(&child->child_lock);
     return -1;
   }
   else
   {
-    lock_release(&child->child_lock);
-    return child->process.exit_status;
+    return child->exit_status;
   }
 }
 

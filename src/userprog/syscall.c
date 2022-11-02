@@ -90,8 +90,7 @@ void
 exit (int status)
 {
   struct thread * t= thread_current();
-  t->process.exit = 1;
-  t->process.exit_status = status;
+  t->child_info->exit_status = status;
   thread_exit();
   NOT_REACHED();
 }

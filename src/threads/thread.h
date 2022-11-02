@@ -15,6 +15,24 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+struct child_info
+   {
+      /* The status when the thread(user process) exit */
+      int exit_status;
+      /* Whether a process exits */
+      bool exit;
+      /* tid for the user process */
+      int tid;
+      /* If killed by exeception */
+      bool killed;
+      /* List element as a child thread */
+      struct list_elem childelem;
+      /* Whether been waited */
+      bool waited;
+      /* semaphore indicates that a childprocess is running */
+      struct semaphore child_sema;
+   };
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -103,20 +121,8 @@ struct thread
    struct thread * parent_thread;
    /* List of the child threads */
    struct list children;
-   struct list_elem childelem;
-   bool waited;
-   struct lock child_lock;
-   struct {
-      /* The status when the thread(user process) exit */
-      int exit_status;
-      /* Whether a process exits */
-      bool exit;
-      /* Pid for the user process */
-      int pid;
-      /* If killed by exeception */
-      bool killed;
-   }process;
-   
+   /* Information of a thread */
+   struct child_info * child_info;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

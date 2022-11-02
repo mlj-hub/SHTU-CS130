@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "malloc.h"
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -183,9 +184,18 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->parent_thread = parent;
+  // init child info
+  t->child_info = malloc(sizeof(struct child_info));
+  t->child_info->exit = 0;
+  t->child_info->exit_status = -1;
+  t->child_info->killed = 0;
+  t->child_info->tid = t->tid;
+  t->child_info->waited = 0;
+  sema_init(&t->child_info->child_sema,0);
 
   /* Add new thread to its parent's children list */
-  list_push_back(&parent->children,&t->childelem);
+  list_push_back(&parent->children,&t->child_info->childelem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -289,15 +299,23 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
-
+  struct thread * t = thread_current();
+  struct child_info * child = NULL;
+  // free child_info of all children of the current thread
+  for(struct list_elem * i = list_begin(&t->children);i!=list_end(&t->children);)
+  {
+    struct child_info * temp = list_entry(i,struct child_info,childelem);
+    i = list_next(i);
+    free(temp);
+  }
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  lock_release(&thread_current()->child_lock);
+  sema_up(&t->child_info->child_sema);
   list_remove (&thread_current()->allelem);
+  thread_current ()->child_info->exit = 1;
   thread_current ()->status = THREAD_DYING;
-  thread_current ()->process.exit = 1;
   schedule ();
   NOT_REACHED ();
 }
@@ -471,12 +489,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   // init addtional members
   list_init(&t->children);
-  t->parent_thread = NULL;
-  t->waited = 0;
-  t->process.exit = 0;
-  t->process.exit_status = -1;
-  t->process.pid = t->tid;
-  t->process.killed = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
