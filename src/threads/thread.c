@@ -308,6 +308,13 @@ thread_exit (void)
     i = list_next(i);
     free(temp);
   }
+  // free all memory alloced for owned files
+  for(struct list_elem * i = list_begin(&t->owned_files);i!=list_end(&t->owned_files);)
+  {
+    struct thread_file * temp = list_entry(i,struct thread_file,file_elem);
+    i = list_next(i);
+    free(temp);
+  }
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
@@ -489,6 +496,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   // init addtional members
   list_init(&t->children);
+  // init list for owned files
+  list_init(&t->owned_files);
+  // the next file decriptor begins at 2
+  t->next_fd = 2;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

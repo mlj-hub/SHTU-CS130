@@ -33,6 +33,16 @@ struct child_info
       struct semaphore child_sema;
    };
 
+struct thread_file
+ {
+   /* Owned file */
+   struct file * file;
+   /* File descriptor */
+   int fd;
+   /* List element */
+   struct list_elem file_elem;
+ };
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -123,7 +133,10 @@ struct thread
    struct list children;
    /* Information of a thread */
    struct child_info * child_info;
-
+   /* List of all owned files */
+   struct list owned_files;
+   /* Next file descriptor */
+   int next_fd;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
