@@ -316,6 +316,10 @@ thread_exit (void)
   {
     struct thread_file * temp = list_entry(i,struct thread_file,file_elem);
     i = list_next(i);
+    thread_acquire_file_lock();
+    if(temp->opened)
+      file_close(temp->file);
+    thread_release_file_lock();
     free(temp);
   }
   /* Remove thread from all threads list, set our status to dying,
@@ -646,8 +650,24 @@ thread_add_file(struct file * file)
   struct thread_file * temp = malloc(sizeof(struct thread_file));
   temp->fd = t->next_fd++;
   temp->file = file;
+  temp->opened = 1;
   list_push_back(&t->owned_files,&temp->file_elem);
   return temp->fd;
+}
+
+void
+thread_close_file(int fd)
+{
+  struct thread * t = thread_current();
+  // find the file according to the file descriptor
+  for(struct list_elem* i =list_begin(&t->owned_files);i!=list_end(&t->owned_files);i=list_next(i))
+  {
+    struct thread_file * temp = list_entry(i,struct thread_file,file_elem);
+    if(temp->fd == fd)
+    {
+      temp->opened = 0;
+    }
+  }
 }
 
 

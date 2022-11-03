@@ -10,6 +10,7 @@
 static void syscall_handler (struct intr_frame *);
 static bool check_ptr(const void * ptr);
 static bool check_esp(const void * esp_);
+static struct thread_file * get_thread_file(int fd);
 static struct file * get_file(int fd);
 
 void
@@ -129,6 +130,17 @@ check_esp(const void * esp)
   return success;
 }
 
+static bool
+check_str(const char * str)
+{
+  for (const char *i = str;;i++){
+    if(!check_ptr(i))
+      return false;
+    if(*i=='\0')
+      return 1;
+  }
+}
+
 void halt (void) 
 {
   shutdown_power_off();
@@ -145,11 +157,11 @@ exit (int status)
 
 pid_t exec (const char *file)
 {
-  if(!check_ptr((const void *)file))
-    return -1;
+  if(!check_ptr((const void *)file) || !check_str(file))
+    exit(-1);
   int pid;
   pid = process_execute(file);
-  
+  return pid;
 }
 
 int wait (pid_t pid)
@@ -160,8 +172,9 @@ int wait (pid_t pid)
 /* Create a file with initial_size. Return true if success and false otherwise */
 bool create (const char *file, unsigned initial_size)
 {
+  /* If the file is not valid, exit(-1) */
   if(!check_ptr(file))
-    return false;
+    exit(-1);
   thread_acquire_file_lock();
   bool success =  filesys_create (file,initial_size);
   thread_release_file_lock();
@@ -171,8 +184,9 @@ bool create (const char *file, unsigned initial_size)
 /* Remove a file. Return true if success and false otherwise */
 bool remove (const char *file)
 {
-   if(!check_ptr(file))
-    return false;
+  /* If the file is not valid, exit(-1) */
+  if(!check_ptr(file))
+    exit(-1);
   thread_acquire_file_lock();
   bool success =  filesys_remove (file);
   thread_release_file_lock();
@@ -182,7 +196,7 @@ bool remove (const char *file)
 int open (const char *file)
 {
   if(!check_ptr(file))
-    return -1;
+    exit(-1);
   thread_acquire_file_lock();
   struct file * temp = filesys_open(file);
   thread_release_file_lock();
@@ -206,16 +220,21 @@ int filesize (int fd)
 int read (int fd, void *buffer, unsigned length)
 {
   for(void * i = buffer;i<buffer+length;i+=PGSIZE)
-    check_ptr(i);
-  thread_acquire_file_lock();
-  int size = 0;
+  {
+    if(!check_ptr(i))
+      exit(-1);
+  } 
   if(fd == 0)
   {
-    size = input_getc();
+    return input_getc();
   }
-  else
+  struct file* file = get_file(fd);
+  if(!file)
+    exit(-1);
+  thread_acquire_file_lock();
+  int size = 0;
   {
-    size = file_read(get_file(fd),buffer,length);
+    size = file_read(file,buffer,length);
   }
   thread_release_file_lock();  
   return size;
@@ -226,7 +245,7 @@ int write (int fd, const void *buffer, unsigned length)
   for(void * i = buffer;i<buffer+length;i+=PGSIZE)
   {
     if(!check_ptr(i))
-      return -1;
+      exit(-1);
   } 
   if(fd == 1)
   {
@@ -236,6 +255,8 @@ int write (int fd, const void *buffer, unsigned length)
   else
   {
     struct file* file = get_file(fd);
+    if(!file)
+      exit(-1);
     thread_acquire_file_lock();
     int size = file_write(file,buffer,length);
     thread_release_file_lock();
@@ -246,6 +267,8 @@ int write (int fd, const void *buffer, unsigned length)
 void seek (int fd, unsigned position)
 {
   struct file * file =  get_file(fd);
+  if(!file)
+    exit(-1);
   thread_acquire_file_lock();
   file_seek(file,position);
   thread_release_file_lock();
@@ -262,15 +285,20 @@ unsigned tell (int fd)
 
 void close (int fd)
 {
-   struct file * file =  get_file(fd);
+  struct thread_file * thread_file =  get_thread_file(fd);
+  if(!thread_file)
+    exit(-1);
+  if(thread_file->opened == 0)
+    exit(-1);
   thread_acquire_file_lock();
-  file_close(file);
+  file_close(thread_file->file);
+  thread_close_file(fd);
   thread_release_file_lock();
 }
 
 /* Get the file according to the file descriptor */
-static struct file *
-get_file(int fd)
+static struct thread_file *
+get_thread_file(int fd)
 {
   struct thread * t = thread_current();
   // find the file according to the file descriptor
@@ -279,9 +307,18 @@ get_file(int fd)
     struct thread_file * temp = list_entry(i,struct thread_file,file_elem);
     if(temp->fd == fd)
     {
-      return temp->file;
+      return temp;
     }
   }
   // if there is no such file, return NULL
+  return NULL;
+}
+
+static struct file *
+get_file(int fd)
+{
+  struct thread_file * thread_file = get_thread_file(fd);
+  if(thread_file)
+    return thread_file->file;
   return NULL;
 }

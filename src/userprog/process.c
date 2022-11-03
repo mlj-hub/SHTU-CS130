@@ -85,8 +85,8 @@ start_process (void *file_name_)
   // tell the parent whether success
   t->parent_thread->child_run= success;
   sema_up(&t->parent_thread->child_load);
-  
-  pass_argument(&if_.esp,file_name);
+  if(success)
+    pass_argument(&if_.esp,file_name);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);

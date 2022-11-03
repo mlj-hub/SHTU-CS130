@@ -39,6 +39,8 @@ struct thread_file
    struct file * file;
    /* File descriptor */
    int fd;
+   /* If the file is opened */
+   bool opened;
    /* List element */
    struct list_elem file_elem;
  };
@@ -186,4 +188,5 @@ int thread_get_load_avg (void);
 void thread_acquire_file_lock();
 void thread_release_file_lock();
 int thread_add_file(struct file * file);
+void thread_close_file(int fd);
 #endif /* threads/thread.h */
