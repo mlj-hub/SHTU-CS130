@@ -228,11 +228,9 @@ int filesize (int fd)
 int read (int fd, void *buffer, unsigned length)
 {
   // Check the validation of buffer
-  for(void * i = buffer;i<buffer+length;i+=PGSIZE)
-  {
-    if(!check_ptr(i))
-      exit(-1);
-  } 
+  if(!check_ptr(buffer) || !check_ptr(buffer+length-1))
+    exit(-1);
+
   // Read from the STDIN
   if(fd == 0)
   {
@@ -253,11 +251,8 @@ int read (int fd, void *buffer, unsigned length)
 int write (int fd, const void *buffer, unsigned length)
 {
   // Check the validation of buffer
-  for(void * i = buffer;i<buffer+length;i+=PGSIZE)
-  {
-    if(!check_ptr(i))
-      exit(-1);
-  } 
+  if(!check_ptr(buffer) || !check_ptr(buffer+length-1))
+    exit(-1);
   // write to the STDOUT
   if(fd == 1)
   {
