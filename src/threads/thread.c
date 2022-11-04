@@ -655,6 +655,7 @@ thread_add_file(struct file * file)
   return temp->fd;
 }
 
+/* Close the fiel according to the file descriptor */
 void
 thread_close_file(int fd)
 {

@@ -89,6 +89,7 @@ check_ptr(const void * ptr)
   return true;
 }
 
+/* Check the validation of the given esp and the address of the arguments  */
 static bool
 check_esp(const void * esp)
 {
@@ -130,6 +131,7 @@ check_esp(const void * esp)
   return success;
 }
 
+/* Check the validation of all character in a string */
 static bool
 check_str(const char * str)
 {
@@ -141,29 +143,34 @@ check_str(const char * str)
   }
 }
 
+/* SysCall halt */
 void halt (void) 
 {
   shutdown_power_off();
 }
 
+/* SysCall exit */
 void
 exit (int status)
 {
   struct thread * t= thread_current();
+  /* Update the information of exit status */
   t->child_info->exit_status = status;
   thread_exit();
   NOT_REACHED();
 }
 
+/* SysCall exit */
 pid_t exec (const char *file)
 {
-  if(!check_ptr((const void *)file) || !check_str(file))
+  if(!check_str(file))
     exit(-1);
   int pid;
   pid = process_execute(file);
   return pid;
 }
 
+/* SysCall wait */
 int wait (pid_t pid)
 {
   return process_wait(pid);
@@ -172,8 +179,8 @@ int wait (pid_t pid)
 /* Create a file with initial_size. Return true if success and false otherwise */
 bool create (const char *file, unsigned initial_size)
 {
-  /* If the file is not valid, exit(-1) */
-  if(!check_ptr(file))
+  /* If the string FILE is not valid, exit(-1) */
+  if(!check_str(file))
     exit(-1);
   thread_acquire_file_lock();
   bool success =  filesys_create (file,initial_size);
@@ -184,8 +191,8 @@ bool create (const char *file, unsigned initial_size)
 /* Remove a file. Return true if success and false otherwise */
 bool remove (const char *file)
 {
-  /* If the file is not valid, exit(-1) */
-  if(!check_ptr(file))
+  /* If the string FILE is not valid, exit(-1) */
+  if(!check_str(file))
     exit(-1);
   thread_acquire_file_lock();
   bool success =  filesys_remove (file);
@@ -195,7 +202,7 @@ bool remove (const char *file)
 
 int open (const char *file)
 {
-  if(!check_ptr(file))
+  if(!check_str(file))
     exit(-1);
   thread_acquire_file_lock();
   struct file * temp = filesys_open(file);
@@ -217,36 +224,41 @@ int filesize (int fd)
   return size;
 }
 
+/* SysCall read */
 int read (int fd, void *buffer, unsigned length)
 {
+  // Check the validation of buffer
   for(void * i = buffer;i<buffer+length;i+=PGSIZE)
   {
     if(!check_ptr(i))
       exit(-1);
   } 
+  // Read from the STDIN
   if(fd == 0)
   {
     return input_getc();
   }
   struct file* file = get_file(fd);
+  // If no such file, exit
   if(!file)
     exit(-1);
   thread_acquire_file_lock();
   int size = 0;
-  {
-    size = file_read(file,buffer,length);
-  }
+  size = file_read(file,buffer,length);
   thread_release_file_lock();  
   return size;
 }
 
+/* SysCall write */
 int write (int fd, const void *buffer, unsigned length)
 {
+  // Check the validation of buffer
   for(void * i = buffer;i<buffer+length;i+=PGSIZE)
   {
     if(!check_ptr(i))
       exit(-1);
   } 
+  // write to the STDOUT
   if(fd == 1)
   {
     putbuf((const char *)buffer,length);
@@ -264,6 +276,7 @@ int write (int fd, const void *buffer, unsigned length)
   }
 }
 
+/* SysCall seek */
 void seek (int fd, unsigned position)
 {
   struct file * file =  get_file(fd);
@@ -274,6 +287,7 @@ void seek (int fd, unsigned position)
   thread_release_file_lock();
 }
 
+/* SysCall tell */
 unsigned tell (int fd)
 {
   struct file * file =  get_file(fd);
@@ -283,6 +297,7 @@ unsigned tell (int fd)
   return pos;
 }
 
+/* SysCall close */
 void close (int fd)
 {
   struct thread_file * thread_file =  get_thread_file(fd);
@@ -296,7 +311,7 @@ void close (int fd)
   thread_release_file_lock();
 }
 
-/* Get the file according to the file descriptor */
+/* Get the thread_file according to the file descriptor */
 static struct thread_file *
 get_thread_file(int fd)
 {
@@ -314,6 +329,7 @@ get_thread_file(int fd)
   return NULL;
 }
 
+/* Get the file according ot the given file descriptor */
 static struct file *
 get_file(int fd)
 {

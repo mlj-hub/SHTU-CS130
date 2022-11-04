@@ -36,6 +36,7 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   char * fn_copy1 = palloc_get_page (0);
+  // If allocation fails, free all the sources
   if (fn_copy == NULL || fn_copy1 == NULL){
     if(fn_copy)
       palloc_free_page (fn_copy); 
@@ -85,6 +86,7 @@ start_process (void *file_name_)
   // tell the parent whether success
   t->parent_thread->child_run= success;
   sema_up(&t->parent_thread->child_load);
+  // if success, the stack is ready, then push the argument
   if(success)
     pass_argument(&if_.esp,file_name);
 
@@ -140,13 +142,9 @@ process_wait (tid_t child_tid UNUSED)
   // wait for the child
   sema_down(&child->child_sema);
   if(child->killed)
-  {
     return -1;
-  }
   else
-  {
     return child->exit_status;
-  }
 }
 
 /* Free the current process's resources. */
@@ -155,6 +153,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  // print the information of the process when exit
   printf ("%s: exit(%d)\n",cur->name,cur->child_info->exit_status);
   file_close(cur->exe_file);
   /* Destroy the current process's page directory and switch back
