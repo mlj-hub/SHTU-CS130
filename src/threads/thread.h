@@ -185,8 +185,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-void thread_acquire_file_lock();
-void thread_release_file_lock();
+void thread_acquire_file_lock(void);
+void thread_release_file_lock(void);
 int thread_add_file(struct file * file);
 void thread_close_file(int fd);
 #endif /* threads/thread.h */

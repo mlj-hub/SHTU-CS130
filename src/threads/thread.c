@@ -630,7 +630,7 @@ allocate_tid (void)
 
 /* Acquire the file lock */
 void
-thread_acquire_file_lock()
+thread_acquire_file_lock(void)
 {
   lock_acquire(&file_lock);
 }

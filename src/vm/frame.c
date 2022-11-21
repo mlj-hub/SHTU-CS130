@@ -1,5 +1,4 @@
 #include "vm/frame.h"
-#include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "userprog/pagedir.h"
 #include "lib/string.h"
@@ -8,11 +7,11 @@
 static struct list frame_table;
 static struct lock frame_lock;
 
-static void * evict_frame();
-static struct frame * find_free_frame();
+static void * evict_frame(void);
+static struct frame * find_free_frame(void);
 
 void
-frame_init()
+frame_init(void)
 {
     list_init(&frame_table);
     lock_init(&frame_lock);
@@ -48,23 +47,23 @@ frame_allocate(enum palloc_flags flag)
 void
 frame_free(void * vaddr)
 {
-    lock_acquire(&frame_table);
+    lock_acquire(&frame_lock);
     for(struct list_elem *i=list_begin(&frame_table);i!=list_end(&frame_table);i=list_next(i))
     {
         struct frame * temp = list_entry(i,struct frame,elem);
-        if(temp->vaddr == vaddr)
+        if(temp->vaddr == (uint32_t)vaddr)
         {
-            list_remove(temp);
+            list_remove(&temp->elem);
             free(temp);
         }
     }
     palloc_free_page(vaddr);
-    lock_release(&frame_table);
+    lock_release(&frame_lock);
 }
 
 /* Evict a frame from memory and return the corresponding kernel virtual memory */
 static void *
-evict_frame()
+evict_frame(void)
 {
     lock_acquire(&frame_lock);
     struct frame * victim_frame = find_free_frame();
@@ -72,7 +71,7 @@ evict_frame()
     {
         struct thread * old_owner = victim_frame->owner;
         victim_frame->owner = thread_current();
-        memset(victim_frame->vaddr,0,PGSIZE);
+        memset((void *)victim_frame->vaddr,0,PGSIZE);
         // TODO: need to remove the vaddr from the owner's page table
         // pagedir_clear_page(old_owner->pagedir,victim_frame->vaddr);
     }
@@ -82,13 +81,13 @@ evict_frame()
 
 /* Find the free frame and return the frame table entry */
 static struct frame *
-find_free_frame()
+find_free_frame(void)
 {
     struct frame * victim = NULL;
     for(struct list_elem *i=list_begin(&frame_table);i!=list_end(&frame_table);i=list_next(i))
     {
         struct frame * temp = list_entry(i,struct frame,elem);
-        if(!pagedir_is_accessed(temp->owner->pagedir,temp->vaddr))
+        if(!pagedir_is_accessed(temp->owner->pagedir,(const void *)temp->vaddr))
         {
             victim = temp;
             break;
