@@ -512,6 +512,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->child_run = 0;
   // init thread's exe_file
   t->exe_file = NULL;
+  // init supplemental page table
+  list_init(&t->supl_page_table);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
