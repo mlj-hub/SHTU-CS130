@@ -33,13 +33,13 @@ grow_stack(void * t,void * fault_addr)
 {
     if(t == NULL){return false;}
 
-    struct supl_page_entry * new_page_entry = malloc(sizeof(t));
+    struct supl_page_entry * new_page_entry = malloc(sizeof(struct supl_page_entry));
 
     if (new_page_entry == NULL) {
 		return false;
 	}
 
-    uint8_t * new_frame = frame_allocate(PAL_USER);
+    uint32_t * new_frame = frame_allocate(PAL_USER);
 
 	if (new_frame == NULL) {
 		free(new_page_entry);
