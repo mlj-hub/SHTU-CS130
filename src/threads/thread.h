@@ -131,6 +131,7 @@ struct thread
 
    /* List of supplemental page table */
    struct list supl_page_table;
+   struct lock supl_page_table_lock;
    /* Pointer to the parent thread  */
    struct thread * parent_thread;
    /* List of the child threads */

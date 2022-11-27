@@ -151,6 +151,9 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+
+  bool success_tag = true;
+
   struct list * supl_page_table = &thread_current()->supl_page_table;
   struct supl_page_entry * fault_page=NULL;
   for(struct list_elem * i=list_begin(supl_page_table);i!=list_end(supl_page_table);i=list_next(i))
@@ -162,14 +165,37 @@ page_fault (struct intr_frame *f)
     }
   }
 
+   if(fault_page != NULL)
+   {
+      success_tag = load_page(fault_page);
+      if(success_tag)
+      {
+         return;
+      }
+   }
+
+   else // grow stack
+   {
+      if(fault_addr<=f->esp+32 && fault_addr>=f->esp)
+      {
+         success_tag = grow_stack(fault_page,fault_addr);
+      }
+   }
+
+   if(success_tag == false)
+   {
+      kill (f);
+   }
+
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+  /*printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+          user ? "user" : "kernel");*/
+
 }
 
