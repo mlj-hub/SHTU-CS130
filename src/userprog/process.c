@@ -17,6 +17,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
+#include "vm/mmap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -159,6 +161,13 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+  for(struct list_elem *e = list_begin(&cur->mapped_list);e!=list_end(&cur->mapped_list);)
+  {
+    struct list_elem * next_elem = list_next(e);
+    struct mmap_entry * mmap = list_entry(e,struct mmap_entry,elem);
+    munmap(mmap->mapid);
+    e = next_elem;
+  }
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -377,8 +386,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 }
 
 /* load() helpers. */
-
-bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
