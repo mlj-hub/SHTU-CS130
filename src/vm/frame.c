@@ -55,6 +55,7 @@ frame_free(void * vaddr)
         {
             list_remove(&temp->elem);
             free(temp);
+            break;
         }
     }
     palloc_free_page(vaddr);
