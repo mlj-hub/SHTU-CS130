@@ -5,6 +5,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "vm/page.h"
+#include "threads/vaddr.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -151,8 +153,10 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+   if(!not_present || !user)
+      kill(f);
 
-  bool success_tag = true;
+  bool success = false;
 
   struct list * supl_page_table = &thread_current()->supl_page_table;
   struct supl_page_entry * fault_page=NULL;
@@ -162,30 +166,25 @@ page_fault (struct intr_frame *f)
     if(temp->uaddr == fault_addr)
     {
       fault_page = temp;
+      break;
     }
   }
 
    if(fault_page != NULL)
    {
-      success_tag = load_page(fault_page);
-      if(success_tag)
-      {
+      success = load_page(fault_page);
+      if(success)
          return;
-      }
    }
 
    else // grow stack
    {
-      if(fault_addr<=f->esp+32 && fault_addr>=f->esp)
-      {
-         success_tag = grow_stack(fault_page,fault_addr);
-      }
+      if(fault_addr<=f->esp+32 && fault_addr>=f->esp && fault_addr>= PHYS_BASE - STACK_LIMIT)
+         success = grow_stack(fault_addr);
    }
 
-   if(success_tag == false)
-   {
+   if(!success)
       kill (f);
-   }
 
 
   /* To implement virtual memory, delete the rest of the function
