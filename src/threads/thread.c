@@ -501,6 +501,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+/* Project 2 */
   // init addtional members
   list_init(&t->children);
   // init list for owned files
@@ -512,8 +514,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->child_run = 0;
   // init thread's exe_file
   t->exe_file = NULL;
+
+/* Project 3 */
   // init supplemental page table
   list_init(&t->supl_page_table);
+  // init mapped list
+  list_init(&t->mapped_list);
+  // init next file map id to 0
+  t->next_mapid = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -669,6 +677,7 @@ thread_close_file(int fd)
     if(temp->fd == fd)
     {
       temp->opened = 0;
+      return;
     }
   }
 }

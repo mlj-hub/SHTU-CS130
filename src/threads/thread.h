@@ -129,9 +129,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
-   /* List of supplemental page table */
-   struct list supl_page_table;
-   struct lock supl_page_table_lock;
+/* Project2 */
    /* Pointer to the parent thread  */
    struct thread * parent_thread;
    /* List of the child threads */
@@ -148,6 +146,17 @@ struct thread
    int next_fd;
    /* Executable file */
    struct file * exe_file;
+
+/* Project3 */
+   /* List of supplemental page table */
+   struct list supl_page_table;
+   /* List of mapped files */
+   struct list mapped_list;
+   /* Lock for supl_page_table */
+   struct lock supl_page_table_lock;
+   /* File map id */
+   int next_mapid;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
