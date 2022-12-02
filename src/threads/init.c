@@ -29,6 +29,9 @@
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
 #else
+#ifdef VM
+#include "vm/frame.h"
+#endif
 #include "tests/threads/tests.h"
 #endif
 #ifdef FILESYS
@@ -119,6 +122,7 @@ main (void)
   thread_start ();
   serial_init_queue ();
   timer_calibrate ();
+  frame_init();
 
 #ifdef FILESYS
   /* Initialize file system. */
