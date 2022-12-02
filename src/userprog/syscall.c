@@ -6,12 +6,18 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "vm/page.h"
+#include "threads/malloc.h"
+#include "vm/mmap.h"
+#include "vm/frame.h"
 
 static void syscall_handler (struct intr_frame *);
 static bool check_ptr(const void * ptr);
 static bool check_esp(const void * esp_);
 static struct thread_file * get_thread_file(int fd);
 static struct file * get_file(int fd);
+static bool exsit_overlap_mmap(uint32_t addr,uint32_t size);
+static void free_mmap(struct mmap_entry * mmp);
 
 void
 syscall_init (void) 
@@ -72,6 +78,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       f->eax = write(*(int*)argv[0],*(const void **)argv[1],*(unsigned*)argv[2]);
       break;
+    case SYS_MMAP:
+      f->eax = mmap(*(int*)argv[0],*(void**)argv[1]);
+      break;
+    case SYS_MUNMAP:
+      munmap(*(mapid_t*)argv[0]);
+      break;
     default:
       exit(-1);
       NOT_REACHED();
@@ -112,11 +124,13 @@ check_esp(const void * esp)
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_MUNMAP:
       if(!check_ptr(esp) || !check_ptr(esp+3))
         success = false;
       break;
     case SYS_SEEK:
     case SYS_CREATE:
+    case SYS_MMAP:
       if(!check_ptr(esp) || !check_ptr(esp+7))
         success = false;
       break;
@@ -306,6 +320,109 @@ void close (int fd)
   thread_release_file_lock();
 }
 
+/* SysCall mmap */
+mapid_t mmap (int fd, void *addr_){
+  uint32_t addr = (uint32_t)addr_;
+  // cannot map input and output
+  if(fd == 0 || fd == 1)
+    return -1;
+  // cannot mapt 0 or unaligned addr
+  if(addr == 0 || (uint32_t)addr%PGSIZE !=0)
+    return -1;
+  
+  thread_acquire_file_lock();
+  struct thread_file* thread_file = get_thread_file(fd);
+  thread_release_file_lock();
+  if(!thread_file)
+    return -1;
+  if(!thread_file->file)
+    return -1;
+
+  int32_t file_size = file_length(thread_file->file);
+  if(file_size == 0)
+    return -1;
+  if(exsit_overlap_mmap((uint32_t)addr,file_size))
+    return -1;
+
+  thread_acquire_file_lock();
+  struct file * f = file_reopen(thread_file->file);
+  thread_release_file_lock();
+
+  // create supplement page entries for the mapped file
+  uint32_t stick_out_page = pg_round_down(addr+file_size);
+  struct thread * cur = thread_current();
+
+  struct mmap_entry * mmap = malloc(sizeof(struct mmap_entry));
+  if(!mmap)
+    return -1;
+  mmap->page_num = 0;
+  int success = 1;
+  // get supplement page entry for each page within the file
+  for(uint32_t ofs = 0;ofs<file_size/PGSIZE+1;ofs+=1)
+  {
+    uint32_t page_start = ofs*PGSIZE+addr;
+    struct supl_page_entry * temp = malloc(sizeof(struct supl_page_entry));
+    // fail to get a supplement page entry
+    if(!temp)
+    {
+      success = -1;
+      break;
+    }
+
+    temp->writable = true;
+    temp->uaddr = addr+ofs*PGSIZE;
+    temp->type = Type_MMP;
+    temp->file = f;
+    temp->file_ofs = ofs*PGSIZE;
+    temp->resident = false;
+    if(page_start == stick_out_page)
+      temp->file_size = file_size-ofs*PGSIZE;
+    else
+      temp->file_size = PGSIZE;
+    
+    list_push_back(&cur->supl_page_table,&temp->elem);
+
+    mmap->page_num++;
+  }
+
+  if(success == -1)
+  {
+    free(mmap);
+    return -1;
+  }
+
+  mmap->file = f;
+  mmap->start_uaddr = addr;
+  mmap->mapid = cur->next_mapid;
+  list_push_back(&cur->mapped_list,&mmap->elem);
+
+  return cur->next_mapid++;
+}
+
+void 
+munmap(mapid_t mapid)
+{
+  struct thread* cur = thread_current();
+  struct mmap_entry * mmp=NULL;
+  // find the file in the mapped list of this thread
+  for(struct list_elem * i = list_begin(&cur->mapped_list);i!=list_end(&cur->mapped_list);i=list_next(i))
+  {
+    struct mmap_entry * temp = list_entry(i,struct mmap_entry,elem);
+    if(temp->mapid==mapid)
+    {
+      mmp = temp;
+      break;
+    }
+  }
+  // the file is not mapped currently
+  if(!mmp)
+    return;
+
+  free_mmap(mmp);
+  list_remove(&mmp->elem);
+  free(mmp);
+}
+
 /* Get the thread_file according to the file descriptor */
 static struct thread_file *
 get_thread_file(int fd)
@@ -332,4 +449,66 @@ get_file(int fd)
   if(thread_file)
     return thread_file->file;
   return NULL;
+}
+
+/* Check whether the memory starts form ADDR and has size SIZE overlaps with 
+   any existed file map, executable or stack. */
+static bool
+exsit_overlap_mmap(uint32_t addr,uint32_t size)
+{
+  struct thread * cur = thread_current();
+  for(uint32_t oft=0;oft<size/PGSIZE+1;oft+=1)
+  {
+    for(struct list_elem * e = list_begin(&cur->supl_page_table);e!=list_end(&cur->supl_page_table);e = list_next(e))
+    {
+      struct supl_page_entry * temp = list_entry(e,struct supl_page_entry,elem);
+      if(temp->uaddr == addr+oft*PGSIZE)
+        return true;
+    }
+  }
+  return false;
+}
+
+/* Free all pages and supplement page entry which is setted for it */
+static void
+free_mmap(struct mmap_entry * mmp)
+{
+  struct thread * cur = thread_current();
+  // the list of all supplement pages of current thread
+  struct list * s_p_table = &cur->supl_page_table;
+  for(int i = 0;i<mmp->page_num;i++)
+  {
+    bool finded = false;
+    for(struct list_elem * e = list_begin(s_p_table);e!=list_end(s_p_table);e = list_next(e))
+    {
+      struct supl_page_entry * temp = list_entry(e, struct supl_page_entry,elem);
+      // if the page is in the memory, free it
+      if(temp->uaddr == mmp->start_uaddr+i*PGSIZE)
+        finded = true;
+      if(temp->uaddr == mmp->start_uaddr+i*PGSIZE && temp->resident)
+      {
+        // if dirty, write it back to the corresponding file
+        if(pagedir_is_dirty(cur->pagedir,temp->uaddr))
+        {
+          thread_acquire_file_lock();
+          file_write_at(mmp->file,temp->uaddr,temp->file_size,temp->file_ofs);
+          thread_release_file_lock();
+        }
+        // free the kernel address according to the supplemental page entry
+        frame_free(temp->kaddr);
+        // remove the corresponding user virtual address from the page directory
+        pagedir_clear_page(cur->pagedir,temp->uaddr);
+      }
+      if(finded)
+      {
+        list_remove(e);
+        free(temp);
+        break;
+      }
+    }
+    if(finded == false)
+    {
+      PANIC("cannot find a supplemental page table entry when unmap a file\n");
+    }
+  }
 }

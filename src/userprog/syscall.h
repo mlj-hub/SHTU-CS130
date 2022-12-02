@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <debug.h>
 typedef int pid_t;
+typedef int mapid_t;
 
 void syscall_init (void);
 
@@ -20,5 +21,9 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
+/* Project 3 */
+mapid_t mmap (int fd, void *addr);
+void munmap (mapid_t);
 
 #endif /* userprog/syscall.h */
