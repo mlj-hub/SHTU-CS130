@@ -170,6 +170,7 @@ process_exit (void)
     munmap(mmap->mapid);
     e = next_elem;
   }
+  free_process_page(thread_current());
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set

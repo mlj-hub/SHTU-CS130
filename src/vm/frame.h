@@ -21,5 +21,6 @@ struct frame
 void frame_init(void);
 void * frame_allocate(enum palloc_flags flag,struct supl_page_entry * supl_page);
 void frame_free(void * vaddr);
+void free_process_page(struct thread * t);
 
 #endif

@@ -80,6 +80,7 @@ evict_frame(struct supl_page_entry * supl_page)
   struct frame * victim_frame = find_victim_frame();
   struct supl_page_entry* s_p_entry = victim_frame->supl_page;
   lock_acquire(&s_p_entry->supl_lock);
+
   if(pagedir_is_dirty(victim_frame->owner->pagedir,s_p_entry->uaddr))
   {
     if(s_p_entry->type == Type_MMP)
@@ -143,4 +144,24 @@ find_victim_frame(void)
     }
   }
   return victim;
+}
+
+void 
+free_process_page(struct thread * t)
+{
+
+  lock_acquire(&frame_lock);
+
+  for(struct list_elem * i = list_begin(&frame_table);i!=list_end(&frame_table);)
+  {
+    struct frame * temp = list_entry(i,struct frame,elem);
+    if(temp->owner == t)
+    {
+      i = list_remove(i);
+      free(temp);
+    }
+    else
+      i = list_next(i);
+  }
+  lock_release(&frame_lock);
 }
