@@ -25,9 +25,11 @@ frame_init(void)
 void *
 frame_allocate(enum palloc_flags flag,struct supl_page_entry * supl_page)
 {
+  // kernel virtual address allocated from the user pool
   void * vaddr = palloc_get_page(flag);
   if(vaddr==NULL)
   {
+    // no more memory, need to evict
     vaddr = evict_frame(supl_page);
     if(!vaddr)
       return NULL;
@@ -96,8 +98,8 @@ evict_frame(struct supl_page_entry * supl_page)
         lock_release(&frame_lock);
         return NULL;
       }
-      victim_frame->supl_page->swap_ofs = swap_ofs;
-      victim_frame->supl_page->type = Type_Swap;
+      s_p_entry->swap_ofs = swap_ofs;
+      s_p_entry->type = Type_Swap;
     }
   }
   // remove the frame from the owner's pagedir
@@ -120,7 +122,7 @@ find_victim_frame(void)
   for(struct list_elem *i=list_begin(&frame_table);i!=list_end(&frame_table);i=list_next(i))
   {
     struct frame * temp = list_entry(i,struct frame,elem);
-    if(!pagedir_is_dirty(temp->owner->pagedir,temp->supl_page->uaddr))
+    if(!pagedir_is_accessed(temp->owner->pagedir,temp->supl_page->uaddr))
     {
       victim = temp;
       break;

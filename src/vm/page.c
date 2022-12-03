@@ -36,7 +36,8 @@ load_page(struct supl_page_entry * t)
         memset(kaddr+t->file_size,0,PGSIZE-t->file_size);   
       break;
     case Type_Swap:
-      read_from_swap(t->swap_ofs, kaddr);
+      if(!read_from_swap(t->swap_ofs, kaddr))
+        PANIC("fail to read from swp\n");
       break;
     default:
       PANIC("Unkonwn page type");

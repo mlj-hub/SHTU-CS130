@@ -476,6 +476,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       temp->resident = false;
       temp->file_ofs = ofs;
       temp->file_size = page_read_bytes;
+      temp->last_accessed_time = timer_ticks();
       lock_init(&temp->supl_lock);
       list_push_back(&cur->supl_page_table,&temp->elem);
 

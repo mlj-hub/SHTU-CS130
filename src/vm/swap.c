@@ -43,18 +43,7 @@ bool
 read_from_swap(uint32_t idx,uint32_t kaddr)
 {
   lock_acquire(&swap_lock);
-  if(!check_idx(idx))
-  {
-    lock_release(&swap_lock);
-    return false;
-  }
-
-  bool success = bitmap_scan_and_flip(swap_bit_map,idx,sector_per_page,allocated);
-  if(!success)
-  {
-    lock_release(&swap_lock);
-    return false;
-  }
+  bitmap_scan_and_flip(swap_bit_map,idx,sector_per_page,allocated);
 
   for(int i=0;i<sector_per_page;i++)
   {

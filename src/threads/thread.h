@@ -152,8 +152,6 @@ struct thread
    struct list supl_page_table;
    /* List of mapped files */
    struct list mapped_list;
-   /* Lock for supl_page_table */
-   struct lock supl_page_table_lock;
    /* File map id */
    int next_mapid;
 

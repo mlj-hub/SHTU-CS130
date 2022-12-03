@@ -174,12 +174,15 @@ page_fault (struct intr_frame *f)
   }
 
   if(fault_page != NULL)
+  {
     success = load_page(fault_page);
-
+  }
   else // grow stack
+  {
     if(fault_addr_origin>=f->esp-32  && fault_addr_origin>= PHYS_BASE - STACK_LIMIT)
       success = grow_stack(fault_addr_origin);
-
+  }
+   
   if(!success)
     exit (-1);
 

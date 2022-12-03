@@ -4,9 +4,9 @@
 #include "threads/thread.h"
 #include <stdint.h>
 
-#define Type_Swap  1
-#define Type_MMP   2
-#define Type_Exe   3
+#define Type_Swap  1 // in swap
+#define Type_MMP   2 // mmaped files
+#define Type_Exe   3 // exectutable, which has not been loaded. If loaded and fault, in swap
 
 #define STACK_LIMIT 0x800000
 
