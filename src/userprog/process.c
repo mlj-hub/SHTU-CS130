@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 #include "syscall.h"
 #include "vm/mmap.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -453,8 +455,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
-  file_seek (file, ofs);
+  struct thread * cur = thread_current();
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -463,30 +464,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      /* get a supl page entry for the page */
+      struct supl_page_entry * temp = malloc(sizeof(struct supl_page_entry));
+      if(!temp)
         return false;
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+      temp->writable = writable;
+      temp->uaddr = upage;
+      temp->type = Type_Exe;
+      temp->file = file;
+      temp->resident = false;
+      temp->file_ofs = ofs;
+      temp->file_size = page_read_bytes;
+      lock_init(&temp->supl_lock);
+      list_push_back(&cur->supl_page_table,&temp->elem);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      ofs+=page_read_bytes;
     }
   return true;
 }
@@ -498,16 +495,10 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
+  success = grow_stack(PHYS_BASE-PGSIZE);
+  if(success)
+    *esp = PHYS_BASE;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
   return success;
 }
 

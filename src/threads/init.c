@@ -31,6 +31,7 @@
 #else
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/swap.h"
 #endif
 #include "tests/threads/tests.h"
 #endif
@@ -123,14 +124,13 @@ main (void)
   serial_init_queue ();
   timer_calibrate ();
   frame_init();
-
 #ifdef FILESYS
   /* Initialize file system. */
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
-
+  swap_init();
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */

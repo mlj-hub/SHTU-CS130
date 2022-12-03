@@ -6,6 +6,7 @@
 
 #define Type_Swap  1
 #define Type_MMP   2
+#define Type_Exe   3
 
 #define STACK_LIMIT 0x800000
 
@@ -30,6 +31,14 @@ struct supl_page_entry
     int file_ofs;
     /* Size of file in this page */
     int file_size;
+
+    /* Swap offset */
+    int swap_ofs;
+
+    /* Last accessed time */
+    int32_t last_accessed_time; 
+    /* Lock for supl page entry */
+    struct lock supl_lock;
  };
 
 

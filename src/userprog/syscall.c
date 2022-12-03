@@ -18,6 +18,9 @@ static struct thread_file * get_thread_file(int fd);
 static struct file * get_file(int fd);
 static bool exsit_overlap_mmap(uint32_t addr,uint32_t size);
 static void free_mmap(struct mmap_entry * mmp);
+static bool vm_check_buffer(void * buffer, uint32_t size);
+
+static void * sys_esp;
 
 void
 syscall_init (void) 
@@ -36,6 +39,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   int sys_num = *(int *)esp;
   void * argv[3]={esp+4, esp+8,esp+12};
+  sys_esp = f->esp;
   // choose which syscall to call according to sys_num
   switch(sys_num)
   {
@@ -242,7 +246,7 @@ int filesize (int fd)
 int read (int fd, void *buffer, unsigned length)
 {
   // Check the validation of buffer
-  if(!check_ptr(buffer) || !check_ptr(buffer+length-1))
+  if(!vm_check_buffer(buffer,length))
     exit(-1);
 
   // Read from the STDIN
@@ -265,7 +269,7 @@ int read (int fd, void *buffer, unsigned length)
 int write (int fd, const void *buffer, unsigned length)
 {
   // Check the validation of buffer
-  if(!check_ptr(buffer) || !check_ptr(buffer+length-1))
+  if(!check_ptr(buffer)||!check_ptr(buffer+length-1))
     exit(-1);
   // write to the STDOUT
   if(fd == 1)
@@ -357,8 +361,13 @@ mapid_t mmap (int fd, void *addr_){
     return -1;
   mmap->page_num = 0;
   int success = 1;
+  uint32_t page_num = 0;
+  if(file_size % PGSIZE ==0)
+    page_num = file_size/PGSIZE;
+  else
+    page_num = file_size/PGSIZE+1;
   // get supplement page entry for each page within the file
-  for(uint32_t ofs = 0;ofs<file_size/PGSIZE+1;ofs+=1)
+  for(uint32_t ofs = 0;ofs<page_num;ofs+=1)
   {
     uint32_t page_start = ofs*PGSIZE+addr;
     struct supl_page_entry * temp = malloc(sizeof(struct supl_page_entry));
@@ -379,7 +388,7 @@ mapid_t mmap (int fd, void *addr_){
       temp->file_size = file_size-ofs*PGSIZE;
     else
       temp->file_size = PGSIZE;
-    
+    lock_init(&temp->supl_lock);
     list_push_back(&cur->supl_page_table,&temp->elem);
 
     mmap->page_num++;
@@ -454,10 +463,17 @@ get_file(int fd)
 /* Check whether the memory starts form ADDR and has size SIZE overlaps with 
    any existed file map, executable or stack. */
 static bool
-exsit_overlap_mmap(uint32_t addr,uint32_t size)
+exsit_overlap_mmap(uint32_t addr_,uint32_t size)
 {
   struct thread * cur = thread_current();
-  for(uint32_t oft=0;oft<size/PGSIZE+1;oft+=1)
+  uint32_t addr = pg_round_down(addr_);
+  uint32_t page_num = 0;
+  if(size % PGSIZE ==0){
+    page_num = size/PGSIZE;
+  }
+  else
+    page_num = size/PGSIZE+1;
+  for(uint32_t oft=0;oft<page_num;oft+=1)
   {
     for(struct list_elem * e = list_begin(&cur->supl_page_table);e!=list_end(&cur->supl_page_table);e = list_next(e))
     {
@@ -484,7 +500,10 @@ free_mmap(struct mmap_entry * mmp)
       struct supl_page_entry * temp = list_entry(e, struct supl_page_entry,elem);
       // if the page is in the memory, free it
       if(temp->uaddr == mmp->start_uaddr+i*PGSIZE)
+      {
         finded = true;
+        lock_acquire(&temp->supl_lock);
+      }
       if(temp->uaddr == mmp->start_uaddr+i*PGSIZE && temp->resident)
       {
         // if dirty, write it back to the corresponding file
@@ -495,13 +514,17 @@ free_mmap(struct mmap_entry * mmp)
           thread_release_file_lock();
         }
         // free the kernel address according to the supplemental page entry
-        frame_free(temp->kaddr);
-        // remove the corresponding user virtual address from the page directory
-        pagedir_clear_page(cur->pagedir,temp->uaddr);
+        if(temp->resident)
+        {
+         frame_free(temp->kaddr);
+          // remove the corresponding user virtual address from the page directory
+          pagedir_clear_page(cur->pagedir,temp->uaddr);
+        }
       }
       if(finded)
       {
         list_remove(e);
+        lock_release(&temp->supl_lock);
         free(temp);
         break;
       }
@@ -511,4 +534,55 @@ free_mmap(struct mmap_entry * mmp)
       PANIC("cannot find a supplemental page table entry when unmap a file\n");
     }
   }
+}
+
+static bool
+vm_check_ptr(void * ptr)
+{
+  if(!ptr || !is_user_vaddr(ptr))
+    return false;
+  bool success = false;
+  struct thread * cur = thread_current();
+  if(!pagedir_get_page(cur->pagedir,ptr))
+  {
+    struct list * supl_page_table = &thread_current()->supl_page_table;
+    struct supl_page_entry * fault_page=NULL;
+    uint32_t fault_addr = ptr;
+    for(struct list_elem * i=list_begin(supl_page_table);i!=list_end(supl_page_table);i=list_next(i))
+    {
+      fault_addr = pg_round_down(ptr);
+      struct supl_page_entry * temp = list_entry(i,struct supl_page_entry,elem);
+      if(temp->uaddr == fault_addr)
+      {
+        fault_page = temp;
+        break;
+      }
+    }
+
+    if(fault_page != NULL)
+    {
+      success = load_page(fault_page);
+    }
+    else // grow stack
+    {
+      if(fault_addr>=sys_esp-32  && fault_addr>= PHYS_BASE - STACK_LIMIT)
+        success = grow_stack(fault_addr);
+    }
+    return success;
+  }
+  else
+    return true;
+}
+
+static bool
+vm_check_buffer(void * buffer, uint32_t size)
+{
+  uint32_t page_start = pg_round_down((uint32_t)buffer);
+  uint32_t page_end = pg_round_down((uint32_t)buffer+size);
+  for(uint32_t i = page_start;i<=page_end;i+=PGSIZE)
+  {
+    if(!vm_check_ptr(i))
+      return false;
+  }
+  return true;
 }

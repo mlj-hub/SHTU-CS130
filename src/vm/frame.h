@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/palloc.h"
 #include <stdint.h>
+#include "vm/page.h"
 
 struct frame
  {
@@ -13,11 +14,12 @@ struct frame
     uint32_t vaddr;
     /* List elem for Frame Table */
     struct list_elem elem;
-    bool free;
+    /* Supl page entry for which refer to this page */
+    struct supl_page_entry * supl_page;
  };
 
 void frame_init(void);
-void * frame_allocate(enum palloc_flags flag);
+void * frame_allocate(enum palloc_flags flag,struct supl_page_entry * supl_page);
 void frame_free(void * vaddr);
 
 #endif

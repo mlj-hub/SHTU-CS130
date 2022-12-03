@@ -316,10 +316,8 @@ thread_exit (void)
   {
     struct thread_file * temp = list_entry(i,struct thread_file,file_elem);
     i = list_next(i);
-    thread_acquire_file_lock();
     if(temp->opened)
       file_close(temp->file);
-    thread_release_file_lock();
     free(temp);
   }
   /* Remove thread from all threads list, set our status to dying,

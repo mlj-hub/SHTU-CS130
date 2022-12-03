@@ -7,6 +7,7 @@
 #include "vm/page.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
+#include "userprog/syscall.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -130,7 +131,7 @@ page_fault (struct intr_frame *f)
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+  void *fault_addr_;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -139,7 +140,7 @@ page_fault (struct intr_frame *f)
      See [IA32-v2a] "MOV--Move to/from Control Registers" and
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
-  asm ("movl %%cr2, %0" : "=r" (fault_addr));
+  asm ("movl %%cr2, %0" : "=r" (fault_addr_));
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -153,13 +154,15 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-   if(!not_present || !user)
-      kill(f);
+  if(!not_present || (is_kernel_vaddr (fault_addr_) && user) || !not_present)
+    exit(-1);
 
   bool success = false;
-
-  struct list * supl_page_table = &thread_current()->supl_page_table;
+  struct thread * cur = thread_current();
+  struct list * supl_page_table = &cur->supl_page_table;
   struct supl_page_entry * fault_page=NULL;
+  uint32_t fault_addr =  pg_round_down(fault_addr_);
+  uint32_t fault_addr_origin = fault_addr_;
   for(struct list_elem * i=list_begin(supl_page_table);i!=list_end(supl_page_table);i=list_next(i))
   {
     struct supl_page_entry * temp = list_entry(i,struct supl_page_entry,elem);
@@ -170,21 +173,15 @@ page_fault (struct intr_frame *f)
     }
   }
 
-   if(fault_page != NULL)
-   {
-      success = load_page(fault_page);
-      if(success)
-         return;
-   }
+  if(fault_page != NULL)
+    success = load_page(fault_page);
 
-   else // grow stack
-   {
-      if(fault_addr<=f->esp+32 && fault_addr>=f->esp && fault_addr>= PHYS_BASE - STACK_LIMIT)
-         success = grow_stack(fault_addr);
-   }
+  else // grow stack
+    if(fault_addr_origin>=f->esp-32  && fault_addr_origin>= PHYS_BASE - STACK_LIMIT)
+      success = grow_stack(fault_addr_origin);
 
-   if(!success)
-      kill (f);
+  if(!success)
+    exit (-1);
 
 
   /* To implement virtual memory, delete the rest of the function
