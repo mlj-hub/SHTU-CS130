@@ -122,3 +122,11 @@ cache_line_find(block_sector_t sector)
   }
   return CACHE_LINE_INVALID;
 }
+
+/* Flush all cache lines into disk */
+void
+cache_done()
+{
+  for(int i=0;i<CACHE_SIZE;i++)
+    cache_line_flush(i);
+}

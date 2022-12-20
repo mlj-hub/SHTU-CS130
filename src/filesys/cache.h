@@ -23,4 +23,5 @@ struct cache
 void cache_read(block_sector_t sector,void * buffer);
 void cache_write(block_sector_t sector,void * buffer);
 void cache_init();
+void cache_done();
 #endif
