@@ -16,8 +16,6 @@ struct cache
     uint32_t last_accessed_time;
     /* Data */
     uint8_t data[BLOCK_SECTOR_SIZE];
-    /* Lock for cache line */
-    struct lock lock;
   };
 
 void cache_read(block_sector_t sector,void * buffer);

@@ -11,6 +11,7 @@ static cache_id_t cache_line_find(block_sector_t id);
 static void cache_line_flush(cache_id_t id);
 static cache_id_t evict_cache_line();
 static cache_id_t load_from_disk_to_cache(block_sector_t sector);
+static struct lock cache_lock;
 
 struct cache buffer_cache[CACHE_SIZE];
 
@@ -20,17 +21,18 @@ cache_init()
 {
   for(int i =0;i<CACHE_SIZE;i++)
   {
-    lock_init(&buffer_cache[i].lock);
     buffer_cache[i].valid = false;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed_time = 0;
   }
+  lock_init(&cache_lock);
 }
 
 /* Read SECTOR from cache into buffer */
 void
 cache_read(block_sector_t sector,void * buffer)
 {
+  lock_acquire(&cache_lock);
   cache_id_t cache_id = cache_line_find(sector);
 
   if(cache_id == CACHE_LINE_INVALID)
@@ -43,13 +45,14 @@ cache_read(block_sector_t sector,void * buffer)
   buffer_cache[cache_id].valid = true;
   buffer_cache[cache_id].last_accessed_time = timer_ticks();
   memcpy(buffer,buffer_cache[cache_id].data,BLOCK_SECTOR_SIZE);
-
+  lock_release(&cache_lock);
 }
 
 /* Write BUFFER to SECTOR through cache */
 void
 cache_write(block_sector_t sector,void * buffer)
 {
+  lock_acquire(&cache_lock);
   cache_id_t cache_id = cache_line_find(sector);
 
   if(cache_id == CACHE_LINE_INVALID)
@@ -60,7 +63,7 @@ cache_write(block_sector_t sector,void * buffer)
   buffer_cache[cache_id].valid = true;
   buffer_cache[cache_id].last_accessed_time = timer_ticks();
   memcpy(buffer_cache[cache_id].data,buffer,BLOCK_SECTOR_SIZE);
-  
+  lock_release(&cache_lock);
 }
 
 
