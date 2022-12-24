@@ -130,6 +130,8 @@ cache_line_find(block_sector_t sector)
 void
 cache_done()
 {
+  lock_acquire(&cache_lock);
   for(int i=0;i<CACHE_SIZE;i++)
     cache_line_flush(i);
+  lock_release(&cache_lock);
 }
