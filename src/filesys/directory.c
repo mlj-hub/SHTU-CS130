@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -26,7 +27,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry),1);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -38,7 +39,7 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
-      dir->pos = 0;
+      dir->pos = 2*sizeof(struct dir_entry);
       return dir;
     }
   else
@@ -132,6 +133,23 @@ dir_lookup (const struct dir *dir, const char *name,
   return *inode != NULL;
 }
 
+bool
+dir_add_parent_and_self(struct dir * par_dir,struct dir * child_dir)
+{
+  struct dir_entry e;
+  memcpy(e.name,".",2);
+  e.in_use = 1;
+  e.inode_sector = child_dir->inode->sector;
+  if(inode_write_at(child_dir->inode,&e,sizeof(e),0)!=sizeof(e))
+    return false;
+  
+  memcpy(e.name,"..",3);
+  e.inode_sector = par_dir->inode->sector;
+  if(inode_write_at(child_dir->inode,&e,sizeof(e),sizeof(e))!=sizeof(e))
+    return false;
+  return true;
+}
+
 /* Adds a file named NAME to DIR, which must not already contain a
    file by that name.  The file's inode is in sector
    INODE_SECTOR.
@@ -139,13 +157,13 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *par_dir, const char *name, block_sector_t inode_sector,int is_dir)
 {
   struct dir_entry e;
   off_t ofs;
   bool success = false;
 
-  ASSERT (dir != NULL);
+  ASSERT (par_dir != NULL);
   ASSERT (name != NULL);
 
   /* Check NAME for validity. */
@@ -153,8 +171,21 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     return false;
 
   /* Check that NAME is not in use. */
-  if (lookup (dir, name, NULL, NULL))
+  if (lookup (par_dir, name, NULL, NULL))
     goto done;
+
+  if(is_dir)
+  {
+    struct dir * child_dir = dir_open(inode_open(inode_sector));
+    if(!child_dir)
+      return false;
+    if(!dir_add_parent_and_self(par_dir,child_dir))
+    {
+      dir_close(child_dir);
+      return false;
+    }
+    dir_close(child_dir);
+  }
 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
@@ -163,7 +194,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
-  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  for (ofs = 0; inode_read_at (par_dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
     if (!e.in_use)
       break;
@@ -172,7 +203,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
-  success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  success = inode_write_at (par_dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
   return success;
@@ -200,6 +231,18 @@ dir_remove (struct dir *dir, const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+  // cannot remove non-empty dir
+  if(inode->data.is_dir)
+  {
+    struct dir * temp = dir_open(inode);
+    if(!dir_is_empty(temp))
+    {
+      dir_close(temp);
+      goto done;
+    }
+    else
+      dir_close(temp);
+  }
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -233,4 +276,113 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+void
+path_split(const char* path_,char* dir_path, char* file_name)
+{
+  char * path = malloc(strlen(path_)+1);
+  memcpy(path,path_,strlen(path_)+1);
+
+  if(!strrchr(path_,'/'))
+  {
+    *dir_path='\0';
+    memcpy(file_name,path_,strlen(path_)+1);
+    return;
+  }
+
+  if(*path == '/')
+  {
+    dir_path[0]='/';
+    dir_path++;
+  }
+
+  char * token, * save_ptr;
+  char * last_token="";
+  for(token=strtok_r(path,"/",&save_ptr);token!=NULL;)
+  {
+    if(strlen(last_token)>0)
+    {
+      memcpy(dir_path,last_token,strlen(token));
+      dir_path+=strlen(last_token);
+      *dir_path='/';
+      dir_path++;
+    }
+    last_token = token;
+    token = strtok_r(NULL,"/",&save_ptr);
+  }
+  memcpy(file_name,last_token,strlen(last_token)+1);
+  *dir_path = '\0';
+  free(path);
+}
+
+struct dir *
+dir_open_path(const char * path_)
+{
+  char * path = malloc(strlen(path_)+1);
+  memcpy(path,path_,strlen(path_)+1);
+
+  struct dir * cur_dir = NULL;
+  if(*path == '/')
+  {
+    cur_dir = dir_open_root();
+  }
+  else
+  {
+    struct thread * t_cur = thread_current();
+    if(t_cur->cwd == NULL)
+      cur_dir = dir_open_root();
+    else
+      cur_dir = dir_reopen(t_cur->cwd);
+  }
+
+  char * token,*save_ptr;
+  struct inode * inode;
+  for(token = strtok_r(path,"/",&save_ptr);token!=NULL;token = strtok_r(NULL,"/",&save_ptr))
+  {
+    if(!dir_lookup(cur_dir,token,&inode))
+    {
+      dir_close(cur_dir);
+      free(path);
+      return NULL;
+    }
+    struct dir* temp = cur_dir;
+    cur_dir = dir_open(inode);
+    dir_close(temp);
+    if(!cur_dir)
+    {
+      dir_close(cur_dir);
+      free(path);
+    }
+  }
+
+  if(dir_get_inode(cur_dir)->removed)
+  {
+    dir_close(cur_dir);
+    free(path);
+    return NULL;
+  }
+
+  free(path);
+  return cur_dir;
+
+}
+
+bool
+dir_is_empty(struct dir * dir)
+{
+  struct dir_entry e;
+  for(int ofs = 0;inode_read_at(dir->inode,&e,sizeof(e),ofs) == sizeof(e);ofs+=sizeof(e))
+  {
+    if(e.in_use)
+    {
+      if(strcmp(e.name,".")==0)
+        continue;
+      else if(strcmp(e.name,"..")==0)
+        continue;
+      else
+        return false;
+    }
+  }
+  return true;
 }
