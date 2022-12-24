@@ -304,7 +304,7 @@ path_split(const char* path_,char* dir_path, char* file_name)
   {
     if(strlen(last_token)>0)
     {
-      memcpy(dir_path,last_token,strlen(token));
+      memcpy(dir_path,last_token,strlen(last_token));
       dir_path+=strlen(last_token);
       *dir_path='/';
       dir_path++;

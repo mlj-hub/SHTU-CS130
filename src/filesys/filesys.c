@@ -53,36 +53,18 @@ filesys_create (const char *name, off_t initial_size,int is_dir)
   char * dir_path = calloc(1,strlen(name)+1);
   char * file_name = calloc(1,strlen(name)+1);
   path_split(name,dir_path,file_name);
-  // printf("dir path:%s\n",dir_path);
-  // printf("file name:%s\n",file_name);
+
   struct dir *dir = dir_open_path (dir_path);
-  // if(dir == NULL)
-  // {
-  //   printf("null dir\n");
-  // }
+
   
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size,is_dir)
                   && dir_add (dir, file_name, inode_sector,is_dir));
-  // bool success = dir!=NULL;
-  // printf("success dir:%d\n",success);
-  // success = success&&free_map_allocate (1, &inode_sector);
-  // printf("success free map:%d\n",success);
-  // success = success&&inode_create (inode_sector, initial_size,is_dir);
-  // printf("success inode:%d\n",success);
-  // success = success&&dir_add (dir, file_name, inode_sector,is_dir);
-  // printf("success add:%d\n",success);
+
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
-
-  // if(success)
-  // {
-  //   printf("stop here\n");
-  // }
-  // else
-  //   printf("fail create\n");
 
   return success;
 }
@@ -97,8 +79,7 @@ filesys_open (const char *name)
 {
   if(strlen(name)<=0)
     return NULL;
-  // int a = strlen(name);
-  // printf("a:%d\n",a);
+
   char * dir_path = calloc(1,strlen(name)+1);
   char * file_name = calloc(1,strlen(name)+1);
   path_split(name,dir_path,file_name);
