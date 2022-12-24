@@ -278,6 +278,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+/* Split dir_path and file_name according to path_ */
 void
 path_split(const char* path_,char* dir_path, char* file_name)
 {
@@ -316,6 +317,7 @@ path_split(const char* path_,char* dir_path, char* file_name)
   free(path);
 }
 
+/* Open dir according to path */
 struct dir *
 dir_open_path(const char * path_)
 {
@@ -355,7 +357,7 @@ dir_open_path(const char * path_)
       free(path);
     }
   }
-
+  // ignore operations of removed dir
   if(dir_get_inode(cur_dir)->removed)
   {
     dir_close(cur_dir);
@@ -376,6 +378,7 @@ dir_is_empty(struct dir * dir)
   {
     if(e.in_use)
     {
+      // ignore . and ..
       if(strcmp(e.name,".")==0)
         continue;
       else if(strcmp(e.name,"..")==0)

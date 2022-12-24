@@ -342,6 +342,8 @@ void close (int fd)
   thread_release_file_lock();
 }
 
+/*Changes the current working directory of the process to dir, 
+which may be relative or absolute. Returns true if successful, false on failure.*/
 bool chdir (const char *dir)
 {
   if(!check_str(dir))
@@ -352,6 +354,8 @@ bool chdir (const char *dir)
   return success;
 }
 
+/*Creates the directory named dir, which may be relative or absolute. Returns true if successful, false on failure. 
+Fails if dir already exists or if any directory name in dir, besides the last, does not already exist.*/
 bool mkdir (const char *dir)
 {
   if(!check_str(dir))
@@ -363,6 +367,9 @@ bool mkdir (const char *dir)
   return success;
 }
 
+/*Reads a directory entry from file descriptor fd, which must represent a directory. 
+If successful, stores the null-terminated file name in name, which must have room for READDIR_MAX_LEN + 1 bytes, 
+and returns true. If no entries are left in the directory, returns false.*/
 bool readdir (int fd, char name[READDIR_MAX_LEN + 1])
 {
   struct thread_file * temp = get_thread_file(fd);
@@ -378,6 +385,7 @@ bool readdir (int fd, char name[READDIR_MAX_LEN + 1])
   return res;
 }
 
+/*Returns true if fd represents a directory, false if it represents an ordinary file.*/
 bool isdir (int fd)
 {
   struct thread_file * temp = get_thread_file(fd);
@@ -386,6 +394,7 @@ bool isdir (int fd)
   return temp->is_dir;
 }
 
+/*Returns the inode number of the inode associated with fd, which may represent an ordinary file or a directory.*/
 int inumber (int fd)
 {
   struct file * temp = get_file(fd);

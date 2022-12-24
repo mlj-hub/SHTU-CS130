@@ -280,9 +280,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   {
     bool success = inode_extend(&inode->data,offset+size);
     if(!success)
-    {
       return 0;
-    }
     cache_write(inode->sector,&inode->data);
   }
 
@@ -409,7 +407,7 @@ inode_get_data_block(block_sector_t * ptr)
   return true;
 }
 
-/*  */
+/* Extend direct blocks by EXECEPT_LENGTH */
 static bool
 inode_extend_directs(struct inode_disk* disk_inode, int except_length)
 {
@@ -431,7 +429,7 @@ inode_extend_directs(struct inode_disk* disk_inode, int except_length)
   return true;
 }
 
-/*  */
+/* Extend indirect blocks by EXECEPT_LENGTH  */
 static bool
 inode_extend_indirect(block_sector_t * ptr, int except_length)
 {
@@ -466,6 +464,7 @@ inode_extend_indirect(block_sector_t * ptr, int except_length)
   return true;
 }
 
+/* Caclualte the remain blocks of the given indirect ptr */
 static int
 get_free_blocks_indirect(block_sector_t * ptr)
 {
@@ -480,7 +479,7 @@ get_free_blocks_indirect(block_sector_t * ptr)
   return res;
 }
 
-/*  */
+/* Extend double indirect blocks by EXECEPT_LENGTH */
 static bool
 inode_extend_double(block_sector_t * ptr, int except_length)
 {
@@ -544,24 +543,12 @@ inode_extend(struct inode_disk * disk_inode,int length)
 
   bool success = false;
   success = inode_extend_directs(disk_inode,ext_dire);
-  // printf("direct success:%d\n",success);
   success =success&&inode_extend_indirect(&disk_inode->indirect,ext_indire);
-  // printf("indirect success:%d\n",success);
   success =success&&inode_extend_double(&disk_inode->double_indirect,ext_double);
-  // printf("double indirect success:%d\n",success);
 
   if(success)
     disk_inode->length = length;
 
-  // if(!success)
-  // {
-  //   printf("rem_dire:%d\n",rem_dire);
-  //   printf("rem_indire:%d\n",rem_indire);
-  //   printf("ext_dire:%d\n",ext_dire);
-  //   printf("ext_indire:%d\n",ext_indire);
-  //   printf("ext_double_indire:%d\n",ext_double);
-  //   printf("stop here\n");
-  // }
   return success;
 }
 

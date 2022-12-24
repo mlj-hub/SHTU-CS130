@@ -37,7 +37,9 @@ struct thread_file
  {
    /* Owned file */
    struct file * file;
+   /* Directory */
    struct dir * dir;
+   /* Is a directory? */
    bool is_dir;
    /* File descriptor */
    int fd;
