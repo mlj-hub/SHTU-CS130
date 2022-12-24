@@ -29,5 +29,6 @@ bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 void path_split(const char* path,char* dir_path, char* file_name);
 struct dir * dir_open_path(const char * path_);
 bool dir_is_empty(struct dir * dir);
+bool dir_add_parent_and_self(struct dir * par_dir,struct dir * child_dir);
 
 #endif /* filesys/directory.h */
