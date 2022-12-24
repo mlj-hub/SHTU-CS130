@@ -56,7 +56,6 @@ filesys_create (const char *name, off_t initial_size,int is_dir)
 
   struct dir *dir = dir_open_path (dir_path);
 
-  
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size,is_dir)
@@ -99,6 +98,7 @@ filesys_open (const char *name)
     dir_close (dir);
   }
   else
+    // case for '/'
     inode = dir_get_inode(dir);
 
 

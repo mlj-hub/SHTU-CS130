@@ -104,6 +104,7 @@ evict_cache_line()
   return victim_id;
 }
 
+/* Flush a cache line to the disk */
 static void
 cache_line_flush(cache_id_t id)
 {

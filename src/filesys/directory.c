@@ -39,6 +39,7 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
+      // parent and self directory should not be see
       dir->pos = 2*sizeof(struct dir_entry);
       return dir;
     }
@@ -133,6 +134,7 @@ dir_lookup (const struct dir *dir, const char *name,
   return *inode != NULL;
 }
 
+/* Add parent and self directories to a new directory */
 bool
 dir_add_parent_and_self(struct dir * par_dir,struct dir * child_dir)
 {
@@ -332,18 +334,20 @@ dir_open_path(const char * path_)
   else
   {
     struct thread * t_cur = thread_current();
-    if(t_cur->cwd == NULL)
-      cur_dir = dir_open_root();
-    else
+    if(t_cur->cwd != NULL)
       cur_dir = dir_reopen(t_cur->cwd);
+    else
+      cur_dir = dir_open_root();
   }
 
   char * token,*save_ptr;
   struct inode * inode;
   for(token = strtok_r(path,"/",&save_ptr);token!=NULL;token = strtok_r(NULL,"/",&save_ptr))
   {
+    // find the sub directory in cur_dir
     if(!dir_lookup(cur_dir,token,&inode))
     {
+      // if not find, return 
       dir_close(cur_dir);
       free(path);
       return NULL;
@@ -351,11 +355,6 @@ dir_open_path(const char * path_)
     struct dir* temp = cur_dir;
     cur_dir = dir_open(inode);
     dir_close(temp);
-    if(!cur_dir)
-    {
-      dir_close(cur_dir);
-      free(path);
-    }
   }
   // ignore operations of removed dir
   if(dir_get_inode(cur_dir)->removed)

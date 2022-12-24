@@ -332,8 +332,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
   free (bounce);
-  if(bytes_written != origin_size)
-    printf("======\n");
   return bytes_written;
 }
 
@@ -364,6 +362,7 @@ inode_length (const struct inode *inode)
   return inode->data.length;
 }
 
+/* Get block numbers according to the total sector number */
 static void
 get_block_num(int sectors_num,int* direct_num,int*indirect_num,int * double_indirect_num)
 {
