@@ -6,6 +6,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 
 static void syscall_handler (struct intr_frame *);
 static bool check_ptr(const void * ptr);
@@ -72,6 +76,21 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       f->eax = write(*(int*)argv[0],*(const void **)argv[1],*(unsigned*)argv[2]);
       break;
+    case SYS_ISDIR:
+      f->eax = isdir(*(const char **)argv[0]);
+      break;
+    case SYS_MKDIR:
+      f->eax = mkdir(*(const char **)argv[0]);
+      break;
+    case SYS_READDIR:
+      f->eax = readdir(*(int *)argv[0],*(char **)argv[1]);
+      break;
+    case SYS_INUMBER:
+      f->eax = inumber(*(int *)argv[0]);
+      break;
+    case SYS_CHDIR:
+      f->eax = chdir(*(const char **)argv[0]);
+      break;
     default:
       exit(-1);
       NOT_REACHED();
@@ -112,17 +131,22 @@ check_esp(const void * esp)
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_CHDIR:
+    case SYS_MKDIR:
+    case SYS_ISDIR:
+    case SYS_INUMBER:
       if(!check_ptr(esp) || !check_ptr(esp+3))
         success = false;
       break;
     case SYS_SEEK:
     case SYS_CREATE:
+    case SYS_READDIR:
       if(!check_ptr(esp) || !check_ptr(esp+7))
         success = false;
       break;
     case SYS_READ:
     case SYS_WRITE:
-      if(!check_ptr(esp) || !check_ptr(esp+7))
+      if(!check_ptr(esp) || !check_ptr(esp+11))
         success = false;
       break;
     default:
@@ -183,7 +207,7 @@ bool create (const char *file, unsigned initial_size)
   if(!check_str(file))
     exit(-1);
   thread_acquire_file_lock();
-  bool success =  filesys_create (file,initial_size);
+  bool success =  filesys_create (file,initial_size,false);
   thread_release_file_lock();
   return success;
 }
@@ -208,8 +232,14 @@ int open (const char *file)
   struct file * temp = filesys_open(file);
   thread_release_file_lock();
   if(temp){
-    int a =thread_add_file(temp);
-    return a;
+    struct inode * inode = file_get_inode(temp);
+    bool is_dir = inode->data.is_dir;
+    int res;
+    if(inode->data.is_dir)
+      res =thread_add_file(temp,dir_open(inode_reopen(inode)),true);
+    else
+      res = thread_add_file(temp,NULL,false);
+    return res;
   }
   else
     return -1;
@@ -261,11 +291,15 @@ int write (int fd, const void *buffer, unsigned length)
   }
   else
   {
-    struct file* file = get_file(fd);
-    if(!file)
+    struct thread_file * temp = get_thread_file(fd);
+    if(!temp)
+      exit(-1);
+    if(temp->is_dir)
+      return -1;
+    if(!temp->file)
       exit(-1);
     thread_acquire_file_lock();
-    int size = file_write(file,buffer,length);
+    int size = file_write(temp->file,buffer,length);
     thread_release_file_lock();
     return size;
   }
@@ -302,8 +336,65 @@ void close (int fd)
     exit(-1);
   thread_acquire_file_lock();
   file_close(thread_file->file);
+  if(thread_file->is_dir)
+    dir_close(thread_file->dir);
   thread_close_file(fd);
   thread_release_file_lock();
+}
+
+bool chdir (const char *dir)
+{
+  if(!check_str(dir))
+    exit(-1);
+  thread_acquire_file_lock();
+  bool success = filesys_cd(dir);
+  thread_release_file_lock();
+  return success;
+}
+
+bool mkdir (const char *dir)
+{
+  if(!check_str(dir))
+    exit(-1);
+  thread_acquire_file_lock();
+  bool success = filesys_create(dir,0,1);
+  thread_release_file_lock();
+
+  return success;
+}
+
+bool readdir (int fd, char name[READDIR_MAX_LEN + 1])
+{
+  struct thread_file * temp = get_thread_file(fd);
+  if(!temp)
+    return false;
+  if(!temp->is_dir)
+    return false;
+  
+  thread_acquire_file_lock();
+  int res = dir_readdir(temp->dir,name);
+  thread_release_file_lock();
+
+  return res;
+}
+
+bool isdir (int fd)
+{
+  struct thread_file * temp = get_thread_file(fd);
+  if(!temp)
+    return false;
+  return temp->is_dir;
+}
+
+int inumber (int fd)
+{
+  struct file * temp = get_file(fd);
+  if(!temp)
+    return false;
+  thread_acquire_file_lock();
+  int res = inode_get_inumber(file_get_inode(temp));
+  thread_release_file_lock();
+  return res;
 }
 
 /* Get the thread_file according to the file descriptor */

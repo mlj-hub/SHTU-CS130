@@ -100,6 +100,7 @@ thread_init (void)
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
+  initial_thread->cwd = NULL;
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 }
@@ -186,6 +187,8 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  if(thread_current()->cwd!=NULL)
+    t->cwd = dir_reopen(thread_current()->cwd);
   tid = t->tid = allocate_tid ();
   t->parent_thread = parent;
   // init child info
@@ -318,10 +321,15 @@ thread_exit (void)
     i = list_next(i);
     thread_acquire_file_lock();
     if(temp->opened)
+    {
       file_close(temp->file);
+      if(temp->is_dir)
+        dir_close(temp->dir);
+    }
     thread_release_file_lock();
     free(temp);
   }
+  dir_close(thread_current()->cwd);
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
@@ -644,12 +652,14 @@ thread_release_file_lock()
 
 /* Add a file into the current thread's file list and return the file descriptor */
 int
-thread_add_file(struct file * file)
+thread_add_file(struct file * file,struct dir * dir ,bool is_dir)
 {
   struct thread * t = thread_current();
   struct thread_file * temp = malloc(sizeof(struct thread_file));
   temp->fd = t->next_fd++;
+  temp->is_dir = is_dir;
   temp->file = file;
+  temp->dir  =dir;
   temp->opened = 1;
   list_push_back(&t->owned_files,&temp->file_elem);
   return temp->fd;

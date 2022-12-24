@@ -37,6 +37,8 @@ struct thread_file
  {
    /* Owned file */
    struct file * file;
+   struct dir * dir;
+   bool is_dir;
    /* File descriptor */
    int fd;
    /* If the file is opened */
@@ -145,6 +147,8 @@ struct thread
    int next_fd;
    /* Executable file */
    struct file * exe_file;
+   /* Current working directory */
+   struct dir * cwd;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -187,6 +191,6 @@ int thread_get_load_avg (void);
 
 void thread_acquire_file_lock();
 void thread_release_file_lock();
-int thread_add_file(struct file * file);
+int thread_add_file(struct file * file,struct dir * dir ,bool is_dir);
 void thread_close_file(int fd);
 #endif /* threads/thread.h */

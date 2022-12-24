@@ -5,6 +5,8 @@
 #include <debug.h>
 typedef int pid_t;
 
+#define READDIR_MAX_LEN 14
+
 void syscall_init (void);
 
 void halt (void) NO_RETURN;
@@ -20,5 +22,11 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
+bool chdir (const char *dir);
+bool mkdir (const char *dir);
+bool readdir (int fd, char name[READDIR_MAX_LEN + 1]);
+bool isdir (int fd);
+int inumber (int fd);
 
 #endif /* userprog/syscall.h */
